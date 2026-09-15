@@ -32,4 +32,5 @@ ENGINE_SNAPSHOT_DIR=dataset/platform_snapshot/<run_id> python -m scripts.run_bat
 - 数据源：`sim` / `movielens` / `platform`；MovieLens 先跑 `python -m scripts.load_movielens`。
 - 参数见 `src/engine/config.py`（默认 top_n=20，seed 可复现）。
 - `dataset/`、`model/` 不入库；engine 只读写本仓库，与 platform 交接一律手动拷贝。
+- 与 platform 的交接契约（快照与推荐结果的文件格式、换模型时的准则）见 `docs/platform-contract.md`。
 - 架构详见 `docs/design.md`。
