@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 from dataclasses import dataclass, asdict
 import yaml
 
@@ -50,6 +51,11 @@ class EngineConfig:
     model_dir: str = "model"
     snapshot_dir: str = ""   # platform 快照目录（data_source=platform 时使用）
 
+    # MOOCCube（data_source=mooccube 时使用）
+    mooccube_dir: str = "dataset/MOOCCube/MOOCCube"
+    mooccube_max_users: int = 5000        # 活跃用户抽样上限（0 = 不限）
+    mooccube_min_user_courses: int = 5    # 视为「活跃」的最少选课数
+
     @classmethod
     def from_yaml(cls, path: str) -> "EngineConfig":
         with open(path, "r", encoding="utf-8") as f:
@@ -58,3 +64,13 @@ class EngineConfig:
     def to_yaml(self, path: str) -> None:
         with open(path, "w", encoding="utf-8") as f:
             yaml.safe_dump(asdict(self), f, allow_unicode=True)
+
+    def mooccube_config(self):
+        """按当前配置构造 MOOCCubeConfig（延迟 import，避免循环依赖）。"""
+        from .data.mooccube import MOOCCubeConfig
+        return MOOCCubeConfig(
+            root=self.mooccube_dir,
+            max_users=self.mooccube_max_users,
+            min_user_courses=self.mooccube_min_user_courses,
+            id_map_path=os.path.join(self.model_dir, "mooccube_id_map.json"),
+        )
