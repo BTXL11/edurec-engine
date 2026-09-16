@@ -204,6 +204,13 @@ def test_resource_text_combines_title_and_body():
     assert resource_text(by_id[3]) == "只有标题"             # 缺正文时退回标题
 
 
+def test_resource_text_does_not_duplicate_title_already_in_body():
+    """数据源（如 MOOCCube loader）可能已把标题并进正文，不能再拼一次。"""
+    r = Resource(resource_id=1, type="course", category_id=0, tags=(),
+                 metadata={"title": "线性代数"}, description="线性代数。矩阵与特征值")
+    assert resource_text(r) == "线性代数。矩阵与特征值"
+
+
 def test_resource_texts_is_sorted_by_id():
     items = resource_texts(_bundle())
     assert [i for i, _ in items] == [1, 2, 3]

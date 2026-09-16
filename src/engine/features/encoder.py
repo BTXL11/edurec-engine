@@ -333,12 +333,18 @@ def build_encoder(config) -> Encoder:
 # --- 文本构造：统一「资源文本」与「学生需求文本」的口径 ---
 
 def resource_text(resource) -> str:
-    """资源文本 = 标题 + 正文（对齐 CourseHub 的 title + description）。"""
+    """资源文本 = 标题 + 正文（对齐 CourseHub 的 title + description）。
+
+    有些数据源（如 MOOCCube loader）已经把标题并进 `description`，此时不再重复拼接，
+    否则会得到「线性代数。线性代数。矩阵…」这种重复文本，污染编码输入。
+    """
     title = (resource.metadata or {}).get("title") or ""
     body = getattr(resource, "description", "") or ""
-    if title and body:
-        return f"{title}。{body}"
-    return title or body
+    if not body:
+        return title
+    if not title or body.startswith(title):
+        return body
+    return f"{title}。{body}"
 
 
 def resource_texts(bundle) -> list[tuple[int, str]]:

@@ -88,7 +88,8 @@ class MOOCCubeConfig:
 
     root: str = "dataset/MOOCCube/MOOCCube"
     max_users: int = 5000          # 活跃用户抽样上限（0 = 不限）
-    min_user_courses: int = 5      # 视为「活跃」的最少选课数
+    min_user_courses: int = 10     # 视为「活跃」的最少选课数（抽样前过滤）
+    min_courses_after_sample: int = 0  # 抽样后再过滤一次的最小选课数（0 = 不过滤）
     max_tags_per_course: int = 16  # 每门课保留的概念标签数上限
     include_concepts: bool = True  # 读 course-concept/concept 以生成类目与标签
     id_map_path: str = ""          # 非空则写出字符串 ID → 整数编码映射
@@ -214,6 +215,14 @@ def load(cfg: MOOCCubeConfig) -> DataBundle:
 
     user_course: dict[str, list[tuple[str, int]]] = {}
     users = _select_users(user_path, user_course, cfg)
+
+    if cfg.min_courses_after_sample > 0:
+        # 抽样是「均匀覆盖」而非「挑活跃」的，因此需要在抽样后再按训练所需的
+        # 最少交互数过滤一次，否则会混进时间序切分后无法训练/评估的用户。
+        before = len(users)
+        users = [u for u in users
+                 if len({c for c, _ in user_course.get(u, [])}) >= cfg.min_courses_after_sample]
+        _log(cfg, f"抽样后按 >= {cfg.min_courses_after_sample} 门课过滤: {before} → {len(users)}")
 
     course_ids = sorted(courses)
     user_ids = sorted(users)
