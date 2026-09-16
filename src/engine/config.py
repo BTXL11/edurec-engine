@@ -56,6 +56,14 @@ class EngineConfig:
     mooccube_max_users: int = 5000        # 活跃用户抽样上限（0 = 不限）
     mooccube_min_user_courses: int = 5    # 视为「活跃」的最少选课数
 
+    # 文本编码器（语义召回的基础）
+    encoder_kind: str = "local"           # local | sentence_transformer
+    encoder_dim: int = 384                # 对齐 all-MiniLM-L6-v2
+    encoder_cache: bool = True            # 编码结果落盘复用
+    encoder_ngram_min: int = 1            # 本地降级实现的字符 n-gram 下界
+    encoder_ngram_max: int = 2            # 二元组实测优于三元组（Top-10 类目准确率 0.618 vs 0.605）
+    encoder_model: str = "all-MiniLM-L6-v2"   # encoder_kind=sentence_transformer 时使用
+
     @classmethod
     def from_yaml(cls, path: str) -> "EngineConfig":
         with open(path, "r", encoding="utf-8") as f:
