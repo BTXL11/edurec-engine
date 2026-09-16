@@ -88,3 +88,36 @@ def test_platform_loader_without_description_column_degrades(tmp_path):
     _make_snapshot(d)
     b = load(str(d))
     assert all(r.description == "" for r in b.resources)
+
+
+def test_platform_loader_handles_multiline_description(tmp_path):
+    """正文里含换行/逗号/双引号时必须按标准 CSV 转义解析。
+
+    engine 实测真实正文中 66% 含换行，因此这不是边界情况而是常态；
+    若用「按行 split」或手工拼接解析，多行字段会被读坏。
+    """
+    d = tmp_path / "snap6"
+    _make_snapshot(d)
+    body = '第一段，含逗号\n第二段，含"引号"\n第三段'
+    _write_csv(d / "resources.csv",
+               ["resource_id", "title", "description", "type", "category_id",
+                "tags_json", "metadata_json", "avg_rating", "view_count", "created_at"],
+               [[101, "入门课", body, "course", 2, '["数学"]', "{}", 4.5, 12, 1750000000]])
+    b = load(str(d))
+    assert b.resources[0].description == body          # 换行与引号都被完整保留
+    assert "\n" in b.resources[0].description
+
+
+def test_platform_loader_row_count_survives_multiline_fields(tmp_path):
+    """含多行正文时，行数仍应等于资源数（不能被按行读取读成更多行）。"""
+    d = tmp_path / "snap7"
+    _make_snapshot(d)
+    rows = [[i, f"课程{i}", f"第一行\n第二行\n第三行", "course", 1, "[]", "{}",
+             0.0, 0, 1750000000] for i in (101, 202, 303)]
+    _write_csv(d / "resources.csv",
+               ["resource_id", "title", "description", "type", "category_id",
+                "tags_json", "metadata_json", "avg_rating", "view_count", "created_at"],
+               rows)
+    b = load(str(d))
+    assert len(b.resources) == 3
+    assert all(r.description.count("\n") == 2 for r in b.resources)
