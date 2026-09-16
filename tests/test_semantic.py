@@ -52,14 +52,14 @@ def test_infonce_loss_decreases_with_optimization():
         opt.zero_grad()
         loss.backward()
         opt.step()
-    assert float(m(need, pos)) < first
+    assert float(m(need, pos).detach()) < first
 
 
 def test_infonce_uses_negatives_when_provided():
     m = _model()
     need, pos = torch.randn(4, 8), torch.randn(4, 8)
-    without = float(m(need, pos))
-    with_neg = float(m(need, pos, neg_emb=torch.randn(6, 8)))
+    without = float(m(need, pos).detach())
+    with_neg = float(m(need, pos, neg_emb=torch.randn(6, 8)).detach())
     assert without != with_neg              # 负样本列改变了损失
 
 
