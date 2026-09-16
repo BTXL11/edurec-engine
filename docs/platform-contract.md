@@ -277,15 +277,17 @@ Authorization: Bearer <管理员 access_token>
 
 ## 附录：engine 现状与本契约的差距
 
-> 以下是 **2026-09-16 的快照**（`feat/rebuild-model` 分支：语义召回模型重建后），
+> 以下是 **2026-09-16 的快照**（语义召回模型重建后，已并入 `main`），
 > 会随实现演进失效；前面的规范部分不会。清单本身**不是契约**，修掉这些差距不构成契约变更。
+>
+> 标注「实测」的条目是在 platform 轨道上端到端跑过一轮后核对的，不是读代码的推断。
 
 ### 已经符合的（换模型时必须保持）
 
 | 条款 | 现状 |
 |---|---|
 | 主文件形状 | ✅ `{str(user_id): [int resource_id, …]}`，`encoding="utf-8"`（无 BOM） |
-| 用平台原始 ID | ✅ 出口用数据集原始 ID；加载器把字符串 ID 排序编号，原始 ID 留在 `metadata["source_id"]` 与 `id_map` |
+| 用平台原始 ID | ✅ **平台轨道上 ID 原样透传**：`platform.py` 直接用快照里的整数 ID，不做任何重编号（实测：输出键恰为快照用户，资源 ID 全部落在快照内）。MOOCCube 轨道不同——那里的课程 ID 是字符串，加载器排序后编号，原始 ID 留在 `metadata["source_id"]` 与 `id_map`，两条轨道的处理**不可相互套用** |
 | 覆盖全量用户 | ✅ `infer_batch` 默认遍历 `bundle.users` 全部用户，冷启动走热门兜底并有计数 |
 | 按相关性降序 | ✅ 语义分与质量分融合后降序，顺序即排名 |
 | 自行去重 | ✅ 出口按 `argsort` 下标取候选，天然唯一；另有测试断言无重复 |
@@ -300,6 +302,9 @@ Authorization: Bearer <管理员 access_token>
 |---|---|---|
 | 建议「加载前校验 `files_sha256`」 | ❌ `platform.py` 仍未比对 `meta.json` 里的校验和 | 加载时比对一次，挡住拷贝中断 |
 | `categories.csv` | 未读取 | 无需处理（engine 只用 `category_id` 整数），此处仅为完整性 |
+| 出口自检应当是硬失败 | ⚠️ 主文件的三条硬约束校验用的是 `assert`（`scripts/run_batch_infer.py:157-159`）。**`python -O` / `-OO` 会让它们静默消失**——最需要这道闸的场景恰好可能是生产化的运行方式 | 换成显式 `if ... raise SystemExit`；或至少在 README 注明不要带优化开关运行 |
+| 产物路径没有 run 命名空间 | ⚠️ 四个产物都是**固定单槽位**：`model/semantic_recall.pt`、`recommendations.json`、`recommendations.meta.json`、`metrics_semantic.json`，且 `model_dir` **不能用命令行覆盖**。换一条数据源轨道重跑会**覆盖**上一条的模型与结果 | 与 platform 的「单一文件」约定是一致的，但本机切换轨道前要先备份。注意指纹校验只挡得住「模型与数据不匹配」，挡不住「结果被静默换掉」 |
+| 信封缺 `run_id` | 只写了 `snapshot_run_id`（所用的快照），没有「本次推理」自己的标识 | 契约里两个字段都可选、故不违规；但同一模型跑多批产物时无法区分，建议加个时间戳或序号 |
 
 ### 契约未要求、但换模型时会踩到的实现问题
 
@@ -311,6 +316,28 @@ Authorization: Bearer <管理员 access_token>
    读进 `metadata`），模型侧目前只用热度与评分，未做「新资源加权」。
 3. **多路召回合并时需要显式去重。** 当前是单路召回（语义），候选天然唯一；
    一旦做多路合并（语义 + 协同 + 图），必须在上面的出口补一次显式去重。
+
+### 操作陷阱：默认数据源不是 `platform`
+
+`scripts/run_batch_infer.py` 的 `--data-source` **默认值是 `mooccube`**。不带参数直接运行，
+产出的 `model/recommendations.json` 里装的是 MOOCCube 的用户/课程 ID，**不是平台 ID**。
+把它拷进 platform 导入，`skipped_users` 会接近全量——而导入接口只回报跳过计数、**不报错**，
+于是现象是「导入成功但推荐没变化」。
+
+所以：**只要产物要交给 platform，就必须显式带 `--data-source platform --snapshot-dir <dir>`。**
+这也正是「方向 A」里那条「只有 platform 轨道可以被导入」的具体落地方式。
+
+### 与契约无关、但接入前应当知道
+
+- **这一版模型的收益尚未被证明。** MOOCCube 上（有正文、均值 400 字）语义召回的
+  HitRate@10 = 0.4432，**低于热门基线的 0.4930**，NDCG 与 MRR 同样全面落后。
+  数字与诊断见 [`gaussian-recall-status.md`](./gaussian-recall-status.md) §2。
+  **「契约通过」只说明能接得上，不等于值得上线**，建议先做一次「有正文 vs 无正文」的对比。
+- **platform 侧数据量是当前真正的瓶颈。** 2026-09-16 实测导出：**2 个用户 / 139 个资源 /
+  14 条行为 / 0 条评分**，且 139 个资源全是视频、没有一门课程。这个规模上任何模型都训练
+  与评估不出结论（训练 loss 直接是 0）。资源里 **126/139 已有正文**，只是 `export_snapshot`
+  没有导出这一列——补导 `description` 的变更请求见
+  [`platform-description-request.md`](./platform-description-request.md)。
 
 ### 已解决的历史问题（保留记录，便于对照）
 
