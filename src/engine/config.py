@@ -14,6 +14,7 @@ class EngineConfig:
     sim_n_categories: int = 12
     sim_n_tags: int = 30
     sim_n_interactions: int = 100_000
+    sim_description_sentences: int = 3   # 每份模拟资源简介的要点句数
 
     # 预处理
     min_user_interactions: int = 5

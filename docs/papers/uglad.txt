@@ -1,0 +1,823 @@
+
+
+===== PAGE 1 =====
+Graphical Abstract
+Uncertainty-aware Generative Learning Path Recommendation with
+Cognition-Adaptive Diffusion
+Xiangrui Xiong, Hang Liang, Baiyang Chen, Zifei Pan, Yanli Lee
+Lucky 
+Guess
+Accidenta
+l Error
+Uncertainty-aware State Encoder
+Expectation State
+& 
+Variance
+Gaussian LSTM
+Cognitive State 
+Presentation
+Concept Interactions
+Noise
+Network
+Cognition-Adaptive
+Diffusion
+Sequential
+Model
+Gaussian Noise
+Iterative Refinement of Next Concept Representation in Latent Space
+Next Concept
+Representation
+in Latent Space
+Recommended Path
+arXiv:2604.14613v1  [cs.IR]  16 Apr 2026
+
+
+===== PAGE 2 =====
+Highlights
+Uncertainty-aware Generative Learning Path Recommendation with
+Cognition-Adaptive Diffusion
+Xiangrui Xiong, Hang Liang, Baiyang Chen, Zifei Pan, Yanli Lee
+• Unify interaction uncertainty and goal-aware encoding in a cohesive
+LPR framework.
+• Propose U-GLAD with Uncertainty-aware State Encoding and Diffu-
+sion Decoding.
+• Gaussian LSTM handles interaction noise for robust cognitive state
+modeling.
+• U-GLAD achieves state-of-the-art results across three educational datasets.
+
+
+===== PAGE 3 =====
+Uncertainty-aware Generative Learning Path
+Recommendation with Cognition-Adaptive Diffusion
+Xiangrui Xionga, Hang Lianga, Baiyang Chena, Zifei Pana, Yanli Leea,∗
+aXihua University, School of Computer and Software
+Engineering, Chengdu, 610039, China
+Abstract
+Learning Path Recommendation (LPR) is critical for personalized education,
+yet current methods often fail to account for historical interaction uncertainty
+(e.g., lucky guesses or accidental slips) and lack adaptability to diverse learn-
+ing goals. We propose U-GLAD (Uncertainty-aware Generative Learning
+Path Recommendation with Cognition-Adaptive Diffusion). To address rep-
+resentation bias, the framework models cognitive states as probability distri-
+butions, capturing the learner’s underlying true state via a Gaussian LSTM.
+To ensure highly personalized recommendation, a goal-oriented concept en-
+coder utilizes multi-head attention and objective-specific transformations to
+dynamically align concept semantics with individual learning goals, generat-
+ing uniquely tailored embeddings. Unlike traditional discriminative ranking
+approaches, our model employs a generative diffusion model to predict the
+latent representation of the next optimal concept. Extensive evaluations on
+three public datasets demonstrate that U-GLAD significantly outperforms
+representative baselines. Further analyses confirm its superior capability in
+perceiving interaction uncertainty and providing stable, goal-driven recom-
+mendation paths.
+Keywords:
+Uncertainty, Generative, Diffusion Models
+∗Corresponding author
+Email address: yanlicomplex@gmail.com (Yanli Lee)
+
+
+===== PAGE 4 =====
+1. Introduction
+With the rapid proliferation of online education platforms and the ex-
+plosive growth of digital learning resources [1, 2, 3], providing personalized
+learning experiences has become a core demand in educational informatiza-
+tion [4, 5]. Against this backdrop, Learning Path Recommendation (LPR),
+as a pivotal educational auxiliary technology, has garnered significant atten-
+tion in recent years[6, 7, 8]. The primary objective of LPR is to formulate
+effective concept sequences tailored to a learner’s cognitive state and spe-
+cific learning goals. By organizing discrete concepts into coherent learning
+paths, advanced LPR systems can significantly enhance cognitive levels while
+mitigating learning fatigue [9, 10, 11, 12, 13, 14, 15].
+Regarding cognitive state modeling, existing methods [10, 14, 12] typi-
+cally employ sequential models to fit historical interaction sequences, yield-
+ing deterministic representations of cognitive states. However, a critical issue
+(RQ1) remains: historical interaction sequences are not entirely reliable, as
+they are often confounded by uncertainties arising from random factors such
+as lucky guesses or accidental slips [16] . Consequently, over-fitting to these
+sequences leads to biased estimations of the true knowledge state, which sub-
+sequently impairs the decoding process. In terms of concept representation,
+DLPR [12] pioneered the integration of item difficulty into concept embed-
+dings to ensure that recommended concepts match the learner’s current level,
+thereby addressing the issue of "rugged" paths caused by drastic fluctuations
+in difficulty. Subsequently, SRC [10] utilized the Set-to-Sequence paradigm
+[17] to capture prerequisite relations among concepts, obtaining more logi-
+cally rigorous representations that improve the performance of pointer net-
+works during next-concept decoding. Building upon this, LIGHT [14] fur-
+ther explored prerequisite and synergistic relationships from a graph-based
+perspective to enrich concept semantics. Nevertheless, the concept represen-
+tations produced by these methods lack essential learning goal information
+(RQ2).
+Furthermore, during the decoding stage, conventional schemes utilize
+pointer networks as discriminative models to select the next concept from
+a candidate set. Despite the competitive results of discriminative decoding,
+research [18] suggests that generative solutions based on diffusion models
+[19] can effectively mitigate historical interaction uncertainty to build supe-
+rior recommendation systems. We argue that LPR is particularly well-suited
+for generative approaches because the recommended path should not merely
+2
+
+
+===== PAGE 5 =====
+fit historical data; rather, it should be an idealized sequence generated from
+the cognitive state distribution to maximize the mastery of learning goals.
+Therefore, providing a generative diffusion model solution to predict the la-
+tent representation of the next concept within the LPR domain serves as a
+primary research objective of this paper (RQ3).
+2. Related Work
+2.1. Learning Path Recommendation
+Learning Path Recommendation (LPR) aims to curate personalized con-
+cept sequences tailored to a learner’s cognitive state and specific learning
+objectives. Early methodologies relied on heuristic algorithms [20, 21, 22,
+23, 24], such as genetic algorithms [22] , or utilized reinforcement learning
+for rule-based matching [23] . With the advancement of deep learning, re-
+searchers [25] began employing sequential models like RNNs [26] for path
+generation. Following the rise of self-attention mechanisms, Transformers
+[27] have become the predominant representation models in the LPR field
+due to their superior capability in learning feature representations. Despite
+varying architectures, recent works [10, 14, 12, 15] can generally be catego-
+rized into two classes:
+(1) LPR based on item difficulty and cognitive load constraints. These
+algorithms focus on providing paths with low cognitive load to minimize
+learner frustration. DLPR [12] conceptualizes LPR from a "real walking"
+perspective, arguing that ignoring item difficulty leads to inefficient paths.
+To address this, DLPR integrates difficulty information into concept rep-
+resentations and utilizes a hierarchical reinforcement learning framework to
+strictly control the difficulty of recommended items. KnowLP [15] suggests
+that over-reliance on prerequisite relationships can cause learners to stagnate;
+thus, it constructs a prerequisite graph to dynamically switch to similar but
+easier concepts when a learner encounters obstacles.
+(2) LPR based on concept structural relationship decoding. These meth-
+ods typically adopt an encoder-decoder architecture, where the encoder ex-
+tensively explores structural relations among concepts to provide high-quality
+representations for the decoding process.
+SRC [10] leverages the Set-to-
+Sequence [17] paradigm and self-attention [27] to capture prerequisite depen-
+dencies within concept sets, significantly improving path generation. Build-
+ing on SRC [10], LIGHT [14] delves deeper into structural dependencies by
+3
+
+
+===== PAGE 6 =====
+constructing prerequisite and synergistic graphs, ensuring that concept rep-
+resentations incorporate both sequential dependencies and mutual support
+information.
+While these studies have achieved impressive results by focusing on en-
+riched concept embeddings and discriminative decoding, they have yet to
+account for uncertainty in historical interactions or explore generative de-
+coding strategies.
+2.1.1. Historical Sequence Uncertainty
+Research [18] in recommendation systems indicates that user history often
+contains uncertainties. While systems predict future interactions based on
+historical probability distributions, the presence of erroneous records can
+cause uncertainty and lead to modeling bias if over-fitted. In the field of
+Knowledge Tracing (KT) [28], which is closely related to LPR, UKT [11]
+has confirmed the existence of uncertainty in learner interactions. Factors
+such as accidental slips or lucky guesses result in false negatives and false
+positives, which can mislead models in assessing a learner’s cognitive state.
+To address the neglect of historical sequence uncertainty, UKT adopts
+stochastic distribution embeddings to decouple fundamental knowledge lev-
+els (quantified by the mean) from uncertainty (quantified by covariance).
+Furthermore, UKT employs contrastive learning with negative samples rep-
+resenting guesses and slips to enhance model robustness. In the broader rec-
+ommendation domain, DiffRec posits that recommendation is essentially an
+inference of future interaction probabilities based on "corrupted" historical
+data. The mechanism of diffusion models—where a forward process injects
+Gaussian noise to "corrupt" the history and a reverse process recovers the
+truth—is highly compatible with this recommendation process, allowing for
+the mitigation of historical uncertainty.
+In summary, current LPR methods lack a mechanism to account for his-
+torical interaction uncertainty, which negatively impacts the quality of rec-
+ommended paths. Within the U-GLAD framework, we design a Gaussian
+LSTM to mitigate such uncertainty, yielding smoother and more authentic
+cognitive state representations.
+Furthermore, to further eliminate uncer-
+tainty during the decoding stage, we introduce a cognition-adaptive diffusion
+model to predict the latent representation of the next concept in a generative
+manner.
+4
+
+
+===== PAGE 7 =====
+3. Problem Definition
+In this study, we formalize the knowledge concept structure-based, goal-
+oriented learning path recommendation task [10, 15, 13, 14, 11, 12].
+Let
+C = {c1, c2, . . . , cN} denote the universal set of N knowledge concepts within
+a specific domain. A learner’s specific learning objectives are defined as a
+subset G ⊆C, where G = {g1, g2, . . . } represents the target concepts to be
+mastered. Each historical interaction is represented as a tuple h = (c, y),
+consisting of a concept c ∈C and a corresponding label y ∈[0, 1] that indi-
+cates the mastery status. Given a historical sequence H = {h1, h2, . . . , hi}
+and the target goals G, our framework aims to recommend an optimal learn-
+ing path P = {˜c1, ˜c2, . . . , ˜ck}, where each ˜cj ∈C denotes a recommended
+learning object.
+To evaluate the effectiveness of the recommended sequence, we utilize
+the mastery improvement rate (ET) as the primary metric [10, 14]. For a
+given session, ET quantifies the educational gain by measuring the relative
+progress made toward total mastery of the target goals. The improvement
+rate is formulated as:
+ET = Ee −Eb
+1 −Eb
+(1)
+where Eb represents the initial mastery level before the learning session, and
+Ee denotes the final mastery level achieved after the learner completes the
+recommended path P. In this context, the value 1 represents the theoretical
+maximum mastery level. The ultimate objective of the proposed U-GLAD
+framework is to generate a sequence P that maximizes the expected improve-
+ment rate ET.
+4. Method
+SRC [10] posits that learning path recommendation is essentially a process
+of arranging a set of concepts into a sequence, which can be addressed through
+an encoder-decoder architecture to decouple concept representation learn-
+ing from the sequence generation process. While this architecture achieves
+high-quality representations of cognitive states and concepts, and utilizes
+discriminative decoders to improve goal mastery, it often overlooks historical
+interaction uncertainty. Consequently, we adopt a classic encoder-decoder
+framework but introduce an Uncertainty-aware State Encoder to handle in-
+teraction noise and a Cognition-Adaptive Diffusion model as the primary
+5
+
+
+===== PAGE 8 =====
+component of the decoder to predict the latent representation of the next
+concept in a generative manner. To further enhance personalization, we de-
+sign a goal-oriented concept encoder that adjusts concept representations
+based on specific learning objectives. Figure 1 provides an overview of the
+U-GLAD framework.
+(a) Overview of U-GLAD
+Concept Set
+Concept Interactions
+Uncertainty-aware State Encoder
+Goal-oriented Concept Encoder
+State Update Auxiliary Component
+Encoder
+Decoder
+Cognition-Adaptive Diffusion
+MLP
+Recommended Path
+(b) Uncertainty-aware State Encoder
+(c) Goal-oriented Concept Encoder
+(d) Decoder
+Luck Guess
+Accidental Slip
+Concept Interactions
+LSTM
+MLP
+MLP
+Mean
+Variance
+Tune
+Gaussian LSTM
+Cognitive State
+Representation
+Latent Space
+MLP
+LSTM
+S.U. Auxiliary 
+Component
+Denoise
+Noise Network
+Gaussian Noise
+Next Concept
+Latent Representation
+Concept Set
+Q
+K
+V
+Linear
+Scaled 
+Dot-Product 
+Attention
+Concat
+Multi-Head Attention
++ V
+Goal Concepts
+Average
+G
+AvgPool
++
+Goal-oriented
+Concept
+Representation
++
+Softmax
+Reinforcement Learning
+Next Concepts
+Figure 1: System architecture of U-GLAD. The framework unifies uncertainty-aware state
+encoding and cognition-adaptive diffusion decoding.
+4.1. Encoder
+The encoder in the U-GLAD framework is designed to produce high-
+quality representations of both the learner’s cognitive state and the knowl-
+edge concepts. To mitigate the impact of historical interaction uncertainty
+and obtain a more authentic cognitive state, we design an uncertainty-aware
+6
+
+
+===== PAGE 9 =====
+state encoder using a Gaussian LSTM as the backbone. Furthermore, rec-
+ognizing that different learners have distinct objectives, we develop a goal-
+oriented concept encoder to incorporate target information into concept em-
+beddings, facilitating more effective and personalized decoding.
+4.1.1. Uncertainty-aware State Encoder
+Historical interaction uncertainty arises from behaviors such as accidental
+slips or lucky guesses, making such records unreliable and detrimental to
+recommendation performance [16, 18]. To address this, our Gaussian LSTM
+models the cognitive state as a probability distribution, utilizing mean and
+variance operations to derive a de-noised state representation.
+Specifically, the Gaussian LSTM predicts the expected cognitive state,
+while the variance quantifies the associated uncertainty. The mechanism is
+described by equations (2-5):
+ht
+u = f T
+e (u, ht−1
+u )
+(2)
+where f T
+e is a temporal prediction model implemented as an LSTM [26],
+and u represents the learner. The expectation µt
+u and variance σt
+u are then
+obtained via trainable weight matrices W and bias terms b:
+µt
+u = Wµht
+u + bµ
+(3)
+σt
+u = Softplus(Wσht
+u + bσ)
+(4)
+We posit that a high cognitive state should correlate with lower interaction
+uncertainty, and vice versa. We apply the variance to calibrate the expecta-
+tion:
+ˆht
+u = µt
+u ⊙(1 −σt2
+u )
+(5)
+This mechanism treats variance as a quantification of state reliability; when
+uncertainty is high, the mean is suppressed, whereas it is preserved when
+uncertainty is low. This results in a smoother representation that assists the
+diffusion model during de-noising.
+4.1.2. Goal-oriented Concept Encoder
+Existing methods often ignore the relationship between concepts and
+learning goals. Our goal-oriented concept encoder integrates target informa-
+tion to enhance personalization. Since structural relationships such as pre-
+requisites significantly influence recommendations, we employ a self-attention
+mechanism to capture these associations.
+7
+
+
+===== PAGE 10 =====
+We first project the initial concept embeddings C into query, key, and
+value spaces:
+Q = CWQ,
+K = CWK,
+V = CWV
+(6)
+The scaled dot-product attention quantifies concept dependencies:
+ˆC = Softmax
+QKT
+√
+d
+
+V
+(7)
+To preserve the original concept semantics, we apply a residual connection:
+ˆCa = IV + ˆC
+(8)
+Finally, the semantics of the learning goals G are aggregated and incorpo-
+rated into the preliminary concept representations:
+G = WG
+ 
+1
+|G|
+K
+X
+K=1
+gK
+!
++ ba
+G
+(9)
+ˆcb = ( ˆCa + G + AvgPool( ˆCa))V
+(10)
+The term AvgPool( ˆCa) serves as a constraint to prevent the embeddings
+from deviating too far from the original concept space.
+4.2. Decoder
+The decoder’s task is to predict the next concept representation based
+on the learner’s cognitive state. Unlike discriminative methods that rely on
+pointer networks for selection, we utilize a generative diffusion model, which
+is better suited for generating idealized paths from scratch.
+4.2.1. State Update Auxiliary Component
+The reverse process of the diffusion model is iterative, spanning T time
+steps to predict the latent representation of the next concept. To provide
+real-time guidance, we design an auxiliary component fT
+d (implemented as
+a standard LSTM) to maintain and update the learner’s cognitive state at
+each step:
+ˆht
+u = f T
+d (u, ˆht−1
+u )
+(11)
+Since the generative diffusion scheme inherently accounts for historical un-
+certainty, a standard LSTM is sufficient for this component.
+8
+
+
+===== PAGE 11 =====
+4.2.2. Cognition-Adaptive Diffusion Model
+The reverse process starts from Gaussian noise and iteratively removes
+noise based on the real-time cognitive state ht
+u. This is formalized as:
+pθ(˜cit−1|˜cit) = N(˜cit−1; µθ(˜cit, t, fp(ˆht
+u)), Σθ(˜cit, t, fp(ˆht
+u)))
+(12)
+The parameters are predicted by a noise network πθ. After T iterations, we
+obtain the latent representation of the i-th concept. To map this back to
+a real concept, we calculate the matching degree pi using a transformation
+matrix Wd and apply a mask to avoid repeating visited concepts:
+pi = Wd(˜ci + c)
+(13)
+We use a softmax function to convert these degrees into a probability distri-
+bution for reinforcement learning sampling:
+Pi(pi|ˆhu) = softmax(pi)
+(14)
+4.3. Training
+The optimization objective focuses on maximizing the goal mastery im-
+provement rate ET from Equation (1). To ensure the predicted latent repre-
+sentations correspond to real concepts, we combine a reinforcement learning
+strategy gradient loss Lr with a noise prediction loss Ld as a penalty term,
+regulated by the weight λ:
+L = Lr + λLd
+(15)
+The strategy gradient loss is defined as:
+Lr = −ET
+K
+X
+k=1
+logPi(pi|ˆhu)
+(16)
+where ET is calculated using a Deep Knowledge Tracing (DKT) model.
+The noise prediction loss Ld ensures the diffusion model accurately pre-
+dicts the noise ϵ injected during the forward process, quantified by the mean
+squared error:
+Ld = ||ϵ −πθ(˜cu
+t , t, fp(ˆht
+u))||2
+(17)
+9
+
+
+===== PAGE 12 =====
+Table 1: Statistics of the three educational datasets used in the experiments.
+Dataset
+Students
+Concepts
+Avg. Seq. Length
+Junyi
+5,002
+712
+54.19
+SLP-Physics
+663
+1,451
+54.24
+ASSISTments09
+3,841
+167
+49.54
+5. Experiments
+5.1. Dataset Description
+To evaluate the effectiveness of the U-GLAD framework in learning path
+recommendation, we conducted experiments on three public educational datasets.
+The statistical information for these datasets is summarized in Table 1.
+• Junyi[29]: Collected from Junyi Academy ( a Chinese e-learning plat-
+form), this dataset contains extensive records of learner-concept inter-
+actions and a rich knowledge graph reflecting structural concept rela-
+tionships.
+• SLP-Physics[30]:
+A benchmark dataset from the Smart Learning
+Partner (SLP) platform.
+We utilize the SLP-Physics subset, which
+covers three years of student interactions with physics concepts.
+• ASSISTments09[31]: Released by the ASSISTments online tutoring
+system, this dataset provides detailed information on student responses
+and exercise attempts. It is notably sparser compared to the other two
+datasets.
+5.2. Comparative Experiments
+We compared U-GLAD against three representative frameworks from the
+past three years to validate the effectiveness of our recommended paths:
+• DLPR [12]: A difficulty-aware model that utilizes graph neural net-
+works to aggregate prerequisite relations and employs reinforcement
+learning for path exploration.
+• SRC [10]: Based on the Set-to-Sequence paradigm, this model uses
+self-attention to capture structural semantics and a pointer network for
+discriminative decoding.
+10
+
+
+===== PAGE 13 =====
+• LIGHT [14]: Enhances LPR by constructing prerequisite and syn-
+ergistic graphs to enrich concept embeddings, also utilizing a pointer
+network for decoding.
+Table 2: Performance comparison (in terms of ET ) between U-GLAD and baseline models
+across three datasets with different path lengths.
+Dataset
+Path Length
+SRC
+DLPR
+LIGHT
+U-GLAD (Ours)
+ASSISTments09
+10
+0.4566
+0.4788
+0.4830
+0.5117
+20
+0.5416
+0.5667
+0.5656
+0.6062
+30
+0.5897
+0.5854
+0.5693
+0.6125
+SLP-Physics
+10
+0.7826
+0.7919
+0.7143
+0.8424
+20
+0.8861
+0.8957
+0.8815
+0.9210
+30
+0.9101
+0.9225
+0.9126
+0.9348
+Junyi
+10
+0.4712
+0.5562
+0.5427
+0.5871
+20
+0.6554
+0.6511
+0.6633
+0.6931
+30
+0.6501
+0.6656
+0.6501
+0.7024
+The recommendation performance across three path lengths (10, 20, 30) is
+presented in Table 2. U-GLAD consistently outperforms all baselines across
+all datasets and path length configurations.
+The experimental results demonstrate that U-GLAD consistently and sig-
+nificantly outperforms all strong baseline models across all evaluation con-
+figurations. Notably, on the SLP-Physics dataset with a path length of 30,
+U-GLAD achieves a peak mastery rate (ET) of 0.9348, representing a sub-
+stantial performance breakthrough compared to the latest state-of-the-art
+model, LIGHT (0.9126). Such comprehensive dominance validates the ro-
+bust competitiveness of integrating uncertainty-aware encoding with gener-
+ative diffusion decoding within complex educational environments.
+As the recommended path length scales from 10 to 30, a universal up-
+ward trend in ET is observed across all evaluated models, reflecting enhanced
+knowledge acquisition commensurate with increased learning engagement.
+Within this progression, U-GLAD maintains the steepest growth trajectory
+across different lengths. Particularly in short-path scenarios (L = 10), U-
+GLAD exceeds LIGHT by approximately 12.8% on the SLP-Physics dataset,
+suggesting its superior precision in identifying core concepts even under con-
+strained path lengths.
+11
+
+
+===== PAGE 14 =====
+In contrast to baselines that rely on discriminative ranking via Pointer
+Networks, U-GLAD directly predicts the latent representation of the next
+concept through a cognition-adaptive diffusion model. This generative ap-
+proach allows for the reconstruction of an idealized learning trajectory in the
+latent space, ultimately yielding learning paths of higher pedagogical quality.
+5.3. Ablation Study
+To verify the indispensable role of each component within U-GLAD, we
+designed four variants for ablation analysis:
+• U-GLAD w/o Uncertainty-aware: Replaces the Gaussian LSTM
+with a standard LSTM to evaluate the impact of mitigating historical
+interaction uncertainty on cognitive state modeling.
+• U-GLAD w/o Diffusion: Replaces the generative diffusion model
+with a discriminative MLP mapping, testing the necessity of generative
+decoding for predicting next-concept latent representations.
+• U-GLAD w/o Noise Prediction Loss: Trains the model without
+the noise prediction loss penalty, exploring whether the diffusion model
+generates "hallucinated" or invalid latent representations.
+• U-GLAD w/o Goal-oriented: Removes the objective-aware encod-
+ing capability to test the necessity of tailoring concept representations
+to specific learning goals.
+As shown in Figure 2, all variants exhibited performance degradation.
+We conclude that: (1) historical uncertainty negatively impacts path quality,
+which our Gaussian LSTM effectively mitigates; (2) generative decoding pro-
+duces more accurate latent representations than discriminative methods; (3)
+the noise prediction loss is a critical constraint for generating valid concepts;
+and (4) goal-aware personalization is vital for effective recommendations.
+12
+
+
+===== PAGE 15 =====
+Figure 2: Visualization of ablation studies across three datasets. We evaluate the contri-
+bution of four core components: (1) w/o Uncertainty-aware (replacing Gaussian LSTM
+with standard LSTM), (2) w/o Diffusion (generative vs. discriminative decoding), (3) w/o
+Noise Prediction Loss (absence of noise prediction penalty), and (4) w/o Goal-oriented (re-
+moving objective-aware encoding).
+5.4. Cognitive State De-noising Analysis
+The Gaussian LSTM is designed to form robust cognitive state repre-
+sentations by attenuating interaction noise. To quantify this, we adopt the
+State Instability metric (s), which measures the Euclidean distance be-
+tween cognitive state vectors at adjacent time steps:
+s =
+1
+T −1
+T−1
+X
+t=1
+||ht+1
+u
+−ht
+u||2
+(18)
+13
+
+
+===== PAGE 16 =====
+Figure 3: Cognitive state instability analysis. The heatmaps visualize the state instability
+metric (s) for Gaussian LSTM (left) and the standard LSTM (right) on the Junyi dataset.
+The results demonstrate that while both models exhibit instability initially, Gaussian
+LSTM effectively learns to suppress historical interaction uncertainty as more data is
+ingested, resulting in smoother and more stable cognitive state representations compared
+to the persistent fluctuations of the standard LSTM.
+Visualized in the heatmaps of Figure 3, the Gaussian LSTM (left) ini-
+tially exhibits higher instability but quickly learns to suppress uncertainty as
+more data is ingested, resulting in a smoother and more stable representation
+compared to the standard LSTM (right), which shows persistent fluctuations.
+5.5. Hyperparameter Sensitivity Analysis
+We explored the impact of the diffusion model’s reverse iterations (T)
+and the noise loss weight (λ) with a fixed path length L = 20.
+14
+
+
+===== PAGE 17 =====
+Figure 4: Impact of the number of diffusion model reverse process iterations T and noise
+prediction loss weight λ on the U-GLAD framework.
+On the SLP-Physics and Junyi datasets, performance typically peaks at
+T = 10.
+Excessive iterations lead to over-fitting of historical sequences,
+which may not represent the ideal path for maximizing ET. On the sparse
+ASSISTments09 dataset, a U-shaped trend was observed. At T = 5, the
+decoder likely performs a beneficial "vague matching" optimized by strategy
+gradients. At T = 10, insufficient learning of the noise distribution leads to
+latent representations that deviate from real concepts. Performance recovers
+at T = 20 as the noise network better characterizes the underlying data
+distribution.
+15
+
+
+===== PAGE 18 =====
+6. Conclusion
+This work investigates how to mitigate the negative impact of histor-
+ical interaction uncertainty on cognitive state modeling and introduces a
+generative diffusion approach to learning path recommendation. The pro-
+posed U-GLAD framework demonstrates consistent superiority across mul-
+tiple benchmarks. Our Gaussian LSTM provides robust, de-noised cognitive
+state representations, while the goal-oriented encoder enhances personaliza-
+tion. As one of the early attempts to integrate generative diffusion decoding
+into LPR, this study validates the potential of diffusion models for educa-
+tional sequence planning.
+CRediT authorship contribution statement
+Xiangrui Xiong: Writing – original draft, Methodology, Software, Val-
+idation. Hang Liang: Writing – review & editing. Zifei Pan: Data cu-
+ration.
+Baiyang Chen: Supervision, Writing – review & editing, Visu-
+alization.
+Yanli Lee: Supervision, Writing – review & editing, Funding
+acquisition.
+Declaration of Competing Interest
+The authors declare that they have no known competing financial inter-
+ests or personal relationships that could have appeared to influence the work
+reported in this paper.
+Data availability
+Data will be made available on request.
+References
+[1] A. Sun, X. Chen, Online education and its effective practice: A research
+review, J. Inf. Technol. Educ. Res. 15 (2016) 157–190.
+[2] M. D. B. Castro, G. M. Tumibay, A literature review: efficacy of online
+learning courses for higher education institution using meta-analysis,
+Educ. Inf. Technol. 26 (2021) 1367–1385.
+16
+
+
+===== PAGE 19 =====
+[3] A. D. Dumford, A. L. Miller, Online learning in higher education: ex-
+ploring advantages and disadvantages for engagement, J. Comput. High.
+Educ. 30 (2018) 452–465.
+[4] M. L. Bernacki, M. J. Greene, N. G. Lobczowski, A systematic review of
+research on personalized learning: Personalized by whom, to what, how,
+and for what purpose (s)?, Educ. Psychol. Rev. 33 (2021) 1675–1715.
+[5] O. O. Ayeni, N. M. Al Hamad, O. N. Chisom, B. Osawaru, O. E.
+Adewusi, AI in education: A review of personalized learning and ed-
+ucational technology, GSC Adv. Res. Rev. 18 (2024) 261–271.
+[6] A. H. Nabizadeh, J. P. Leal, H. N. Rafsanjani, R. R. Shah, Learning
+path personalization and recommendation methods: A survey of the
+state-of-the-art, Expert Syst. Appl. 159 (2020) 113596.
+[7] N. W. Rahayu, R. Ferdiana, S. S. Kusumawardani, A systematic review
+of learning path recommender systems, Educ. Inf. Technol. 28 (2023)
+7437–7460.
+[8] D. Shi, T. Wang, H. Xing, H. Xu, A learning path recommen-
+dation model based on a multidimensional knowledge graph frame-
+work for e-learning, Knowledge-Based Systems 195 (2020) 105618.
+doi:10.1016/j.knosys.2020.105618.
+[9] Z. Huang, Q. Liu, C. Zhai, Y. Yin, E. Chen, W. Gao, G. Hu, Exploring
+multi-objective exercise recommendations in online education systems,
+in: In Proc. ACM CIKM Conf., 2019, pp. 1261–1270.
+[10] X. Chen, J. Shen, W. Xia, J. Jin, Y. Song, W. Zhang, W. Liu, M. Zhu,
+R. Tang, K. Dong, Set-to-sequence ranking-based concept-aware learn-
+ing path recommendation, in: In Proc. AAAI Conf., Vol. 37, 2023, pp.
+5027–5035.
+[11] Q. Li, W. Xia, L. Yin, J. Shen, R. Rui, W. Zhang, X. Chen, R. Tang,
+Y. Yu, Graph enhanced hierarchical reinforcement learning for goal-
+oriented learning path recommendation, in: In Proc. ACM CIKM Conf.,
+2023, pp. 1318–1327.
+17
+
+
+===== PAGE 20 =====
+[12] H. Zhang, S. Shen, B. Xu, Z. Huang, J. Wu, J. Sha, S. Wang, Item-
+difficulty-aware learning path recommendation: From a real walking
+perspective, in: In Proc. ACM SIGKDD Conf., 2024, pp. 4167–4178.
+[13] G. Luo, H. Gu, X. Dong, D. Zhou, HA-LPR: A highly adaptive learning
+path recommendation, Educ. Inf. Technol. 30 (2025) 14597–14627.
+[14] X. Yu, S. Yang, Z. Wang, S. Song, H. Ma, Z. Cao, X. Zhang, LIGHT:
+Enhancing learning path recommendation via knowledge topology-aware
+sequence optimization, in: In Proc. ACM SIGIR Conf., 2025, pp. 306–
+315.
+[15] X. Cheng, Z. Zhang, J. Wang, L. Fang, C. He, Q. Guan, S. Pan, W. Luo,
+GraphRAG-induced dual knowledge structure graphs for personalized
+learning path recommendation, in: In Proc. AAAI Conf., Vol. 40, 2026,
+pp. 14610–14620.
+[16] W. Cheng, H. Du, C. Li, E. Ni, L. Tan, T. Xu, Y. Ni, Uncertainty-
+aware knowledge tracing, in: In Proc. AAAI Conf., Vol. 39, 2025, pp.
+27905–27913.
+[17] O. Vinyals, S. Bengio, M. Kudlur, Order matters: Sequence to sequence
+for sets, arXiv preprint arXiv:1511.06391 (2015).
+[18] Z. Li, A. Sun, C. Li, DiffuRec: A diffusion model for sequential recom-
+mendation, ACM Trans. Inf. Syst. 42 (2023) 1–28.
+[19] J. Ho, A. Jain, P. Abbeel, Denoising diffusion probabilistic models, Ad-
+vances in neural information processing systems 33 (2020) 6840–6851.
+[20] M. Birjali, A. Beni-Hssane, M. Erritali, A novel adaptive E-learning
+model based on Big Data by using competence-based knowledge and
+social learner activities, Applied Soft Computing 69 (2018) 14–32.
+[21] M. Zare, C. Pahl, H. Rahnama, M. Nilashi, A. Mardani, O. Ibrahim,
+H. Ahmadi, Multi-criteria decision making approach in E-learning: A
+systematic review and classification, Applied Soft Computing 45 (2016)
+108–128.
+[22] P. Dwivedi, V. Kant, K. K. Bharadwaj, Learning path recommendation
+based on modified variable length genetic algorithm, Educ. Inf. Technol.
+23 (2018) 819–836.
+18
+
+
+===== PAGE 21 =====
+[23] Q. Liu, S. Tong, C. Liu, H. Zhao, E. Chen, H. Ma, S. Wang, Exploiting
+cognitive structure for adaptive learning, in: In Proc. ACM SIGKDD
+Conf., 2019, pp. 627–635.
+[24] N. Gavrilovic, T. Sibalija, D. Domazet, Design and implementation of
+discrete Jaya and discrete PSO algorithms for automatic collaborative
+learning group composition in an e-learning system, Applied Soft Com-
+puting 129 (2022) 109611. doi:10.1016/j.asoc.2022.109611.
+[25] Y. Zhou, C. Huang, Q. Hu, J. Zhu, Y. Tang, Personalized learning full-
+path recommendation model based on LSTM neural networks, Inf. Sci.
+444 (2018) 135–152.
+[26] A. Graves, Long short-term memory, Supervised Seq. Labelling Recur-
+rent Neural Netw. (2012) 37–45.
+[27] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez,
+Ł. Kaiser, I. Polosukhin, Attention is all you need, Advances in neural
+information processing systems 30 (2017).
+[28] G. Abdelrahman, Q. Wang, B. Nunes, Knowledge tracing: A survey,
+ACM Computing Surveys 55 (11) (2023) 1–37. doi:10.1145/3569579.
+[29] H.-S. Chang, H.-J. Hsu, K.-T. Chen, Modeling exercise relationships in
+E-learning: A unified approach, in: Proceedings of the 8th International
+Conference on Educational Data Mining (EDM), 2015, pp. 532–535.
+[30] L. Yu, Y. Pian, Z. Shen, P. Chen, X. Li, SLP: A multi-dimensional
+and consecutive dataset from K-12 education, in: Proceedings of the
+29th International Conference on Computers in Education (ICCE), Asia-
+Pacific Society for Computers in Education, 2021, pp. 261–266.
+[31] M. Feng, N. T. Heffernan, K. R. Koedinger, Addressing the assessment
+challenge with an online system that tutors as it assesses, User Modeling
+and User-Adapted Interaction 19 (3) (2009) 243–266.
+19

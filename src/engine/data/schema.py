@@ -14,6 +14,8 @@ class Resource:
     category_id: int
     tags: tuple[str, ...] = ()
     metadata: dict = field(default_factory=dict)
+    description: str = ""           # 正文/简介，语义嵌入的主要文本来源
+                                    # （平台非必需列，缺失时为空串）
 
 
 @dataclass(frozen=True)

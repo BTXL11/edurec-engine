@@ -44,3 +44,34 @@ def test_behaviors_ratings_counts_preserved(tmp_path):
     assert len(loaded.resources) == 2
     assert len(loaded.behaviors) == 2
     assert len(loaded.ratings) == 2
+
+
+def test_description_roundtrip(tmp_path):
+    import dataclasses
+    b = _make_bundle()
+    b = DataBundle(
+        users=b.users,
+        resources=[
+            dataclasses.replace(b.resources[0], description="讲解 Python 基础语法"),
+            b.resources[1],
+        ],
+        behaviors=b.behaviors,
+        ratings=b.ratings,
+    )
+    save_bundle(b, str(tmp_path))
+    loaded = load_bundle(str(tmp_path))
+    with_desc = [r for r in loaded.resources if r.resource_id == 10][0]
+    without_desc = [r for r in loaded.resources if r.resource_id == 11][0]
+    assert with_desc.description == "讲解 Python 基础语法"
+    assert without_desc.description == ""
+
+
+def test_legacy_resources_csv_without_description_column(tmp_path):
+    """旧版 resources.csv 没有 description 列时，读取应降级为空串而非报错。"""
+    import pandas as pd
+    b = _make_bundle()
+    save_bundle(b, str(tmp_path))
+    df = pd.read_csv(tmp_path / "resources.csv").drop(columns=["description"])
+    df.to_csv(tmp_path / "resources.csv", index=False)
+    loaded = load_bundle(str(tmp_path))
+    assert all(r.description == "" for r in loaded.resources)

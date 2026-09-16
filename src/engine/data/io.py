@@ -7,12 +7,14 @@ from .schema import DataBundle, User, Resource, Behavior, Rating
 def _df_to_resources(df: pd.DataFrame) -> list[Resource]:
     out = []
     for row in df.itertuples():
+        desc = getattr(row, "description", "")      # 旧 CSV 无此列时降级为空串
         out.append(Resource(
             resource_id=int(row.resource_id),
             type=str(row.type),
             category_id=int(row.category_id),
             tags=tuple(str(row.tags).split("|")) if pd.notna(row.tags) else (),
             metadata={},
+            description="" if desc is None or pd.isna(desc) else str(desc),
         ))
     return out
 
@@ -24,6 +26,7 @@ def save_bundle(bundle: DataBundle, out_dir: str) -> None:
     pd.DataFrame([{
         "resource_id": r.resource_id, "type": r.type,
         "category_id": r.category_id, "tags": "|".join(r.tags),
+        "description": r.description,
     } for r in bundle.resources]).to_csv(
         os.path.join(out_dir, "resources.csv"), index=False)
     pd.DataFrame([{

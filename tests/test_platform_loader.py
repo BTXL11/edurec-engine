@@ -65,3 +65,26 @@ def test_platform_loader_missing_file(tmp_path):
     (d / "ratings.csv").unlink()
     with pytest.raises(ValueError, match="缺少文件"):
         load(str(d))
+
+
+def test_platform_loader_reads_description_when_exported(tmp_path):
+    """platform 补导 description 列后，资源正文应进 Resource.description。"""
+    d = tmp_path / "snap4"
+    _make_snapshot(d)
+    _write_csv(d / "resources.csv",
+               ["resource_id", "title", "description", "type", "category_id",
+                "tags_json", "metadata_json", "avg_rating", "view_count", "created_at"],
+               [[101, "入门课", "从零讲解数学分析的核心概念", "course", 2,
+                 '["数学","入门"]', "{}", 4.5, 12, 1750000000],
+                [202, "视频", "", "video", 3, "[]", "{}", 0, 1, 1750000100]])
+    b = load(str(d))
+    assert b.resources[0].description == "从零讲解数学分析的核心概念"
+    assert b.resources[1].description == ""
+
+
+def test_platform_loader_without_description_column_degrades(tmp_path):
+    """contract_version=1 的旧快照没有 description 列：不得报错，降级为空串。"""
+    d = tmp_path / "snap5"
+    _make_snapshot(d)
+    b = load(str(d))
+    assert all(r.description == "" for r in b.resources)
