@@ -2,35 +2,39 @@
 
 教育资源推荐模型引擎（独立仓库），作为 edurec-platform 的离线模型服务。
 
-> **当前状态：重建中（`feat/rebuild-model` 分支）**
-> 上一版「双塔 DSSM 召回 + 多任务 DeepFM 精排 + MMR 重排」的模型、特征、流水线代码
-> 已整体移除，仓库只保留**骨架与数据契约**，用于构建全新模型。旧版实现见 git 历史
-> （截至 `9563a65`）。
+**一期交付：离线训练 + 批量推理。** 产出推荐结果文件，由 platform 导入其 `recommendations`
+缓存表。两仓库之间只有文件交接，不共享数据库与代码。
 
-## 保留了什么
+## 模型
+
+**语义嵌入召回**：把资源正文与「由学生行为历史反推的需求」映射到同一向量空间，
+用距离衡量匹配度，再融合质量信号（热度/评分）排序。参考
+[CourseHub](https://doi.org/10.1109/ICNWC68145.2026.11518402)。
 
 ```
-src/engine/
-  config.py            # 统一配置（dataclass + yaml）
-  data/
-    schema.py          # 统一数据 schema：User / Resource / Behavior / Rating / DataBundle
-    io.py              # 模拟数据 CSV 落盘与读取
-    simulator.py       # 行为模拟器（注入隐藏结构，可复现）
-    movielens.py       # MovieLens-1M 加载器 → 统一 schema
-    platform.py        # platform 数据快照加载器（契约校验）
-scripts/
-  gen_sim_data.py      # 生成模拟数据 → dataset/sim
-  load_movielens.py    # 下载并转换 MovieLens-1M → dataset/ml_processed
+资源文本 ─► Encoder ─► 资源塔 ─┐
+                              ├─ 内积打分 ─► 质量融合 ─► 过滤已交互/去重 ─► top-N
+学生行为历史 ─► 需求文本 ─► Encoder ─► 需求塔 ─┘                            │
+                                                     冷启动 ─► 热门兜底 ─────┘
 ```
 
-三路数据源（模拟器 / MovieLens / platform 快照）都在入口归一为 `DataBundle`，
-新模型的下游只需依赖这套 schema。
+设计文档见 `docs/design.md`。核心实测结论：
 
-## 已移除
+| 方法 | HitRate@5 | HitRate@10 | NDCG@10 | MRR |
+|---|---|---|---|---|
+| 训练后语义双塔 | 0.2864 | 0.4432 | 0.1710 | 0.1947 |
+| 纯文本相似度（不训练） | 0.2648 | 0.3866 | 0.1604 | 0.1972 |
+| 纯热门排序 | 0.3586 | 0.4930 | 0.2174 | 0.2509 |
+| **语义 + 热度融合（默认配置）** | **0.4108** | **0.5758** | **0.2534** | **0.2791** |
+| 随机 | 0.0495 | 0.0990 | – | – |
 
-- `src/engine/features/`、`src/engine/models/`、`src/engine/pipeline/` 及对应单测
-- `src/engine/data/preprocess.py` 中与旧流水线绑定的部分（清洗 / 词表 / 切分 / 样本构建）
-- `scripts/train_all.py`、`scripts/run_batch_infer.py`
+（MOOCCube，5000 活跃用户 / 706 门课，1 vs 99 采样候选协议）
+
+**两点必须知道**：
+1. **纯语义单独用弱于纯热门**；融合后才超过热门 17%。权重是按本数据集实测定的
+   （`0.6 / 0.0 / 0.4`），**不是**论文的 `0.7 / 0.2 / 0.1`。
+2. **概率式（高斯分布）扩展已实现但不启用**——实测无收益，根因与后续方向见
+   `docs/gaussian-recall-status.md`。
 
 ## 环境与测试
 
@@ -39,21 +43,50 @@ pip install -e .[dev]
 python -m pytest tests
 ```
 
-## 数据准备
+## 使用
+
+### 数据源
+
+| 数据源 | 命令 | 说明 |
+|---|---|---|
+| `mooccube` | 数据已在 `dataset/MOOCCube/` | 真实教育域数据，**推荐用这个验证** |
+| `sim` | `python -m scripts.gen_sim_data` | 模拟数据，打通流水线与回归测试 |
+| `platform` | 手动拷入 `dataset/platform_snapshot/<run_id>/` | 平台真实快照，见 `docs/platform-contract.md` |
+
+> ⚠️ `platform` 数据源上语义模型**目前基本失效**：快照未导出资源正文
+> （`resources.description`）。补导请求见 `docs/platform-description-request.md`。
+
+### 训练
 
 ```bash
-python -m scripts.gen_sim_data        # 模拟数据 → dataset/sim
-python -m scripts.load_movielens      # 公开集 → dataset/ml_processed（首次会联网下载）
+python -m scripts.train_semantic --data-source mooccube
+python -m scripts.train_semantic --data-source mooccube --sparse-tail 2   # 加跑历史稀疏场景
 ```
 
-## platform 真实数据
+产出 `model/semantic_recall.pt`（模型 + 编码器版本 + 语料指纹）与
+`model/metrics_semantic.json`（含三条对照基线）。
 
-快照由 platform 的 `export_snapshot` 产出后手动拷入 `dataset/platform_snapshot/<run_id>/`，
-契约与交接流程见 `docs/platform-contract.md`。
+### 批量推理
+
+```bash
+python -m scripts.run_batch_infer --data-source mooccube
+```
+
+产出：
+
+| 文件 | 内容 |
+|---|---|
+| `model/recommendations.json` | 主文件：`{平台 user_id: [平台 resource_id, …]}`，按相关性降序、已去重、覆盖全量用户 |
+| `model/recommendations.meta.json` | 旁挂信封：分数、模型标识、质量权重、快照 run_id（可选） |
+
+主文件格式受契约约束（[`docs/platform-contract.md`](docs/platform-contract.md)）：
+顶层不得有任何非整数数组字段、无 BOM、**先写临时文件再原子重命名**。
+推理前会校验编码器版本与**资源语料指纹**，与训练时不一致则报错退出。
 
 ## 说明
 
-- 数据源：`sim` / `movielens` / `platform`，三路统一为 `DataBundle`。
-- `dataset/`、`model/` 不入库；engine 只读写本仓库，与 platform 交接一律手动拷贝。
-- 参数见 `src/engine/config.py`（seed 可复现）。
-- 架构详见 `docs/design.md`（旧版设计，重建新模型时同步修订）。
+- `dataset/`、`model/` 不入库；engine 只读写本仓库。
+- 参数集中在 `src/engine/config.py`，`seed` 固定可复现。
+- 文本编码器可插拔：本地降级实现（无网络依赖）↔ 真 transformer
+  （`encoder_kind="sentence_transformer"`，需先装 `sentence-transformers` 并缓存模型）。
+- 论文原文抽取文本在 `docs/papers/`（**若仓库公开建议移除**，只留引用信息）。
