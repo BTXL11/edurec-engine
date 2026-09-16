@@ -14,6 +14,10 @@ def load(snapshot_dir: str) -> DataBundle:
     ID 均为平台数据库原始 ID（含 0 起始等任意取值），不做重排。
     资源多余列（title/view_count/avg_rating/created_at…）保留到 metadata，
     供后续特征扩展使用。契约校验失败抛 ValueError。
+
+    `description`（资源正文）是**可选列**：当前 contract_version=1 的快照不含它，
+    缺失时降级为空串而不报错——语义模型所需正文由 platform 侧补导，
+    详见 docs/platform-contract.md「方向 A · resources.csv」。
     """
     missing = [f for f in _REQUIRED if not os.path.isfile(os.path.join(snapshot_dir, f))]
     if missing:
@@ -54,6 +58,7 @@ def load(snapshot_dir: str) -> DataBundle:
             category_id=int(r["category_id"]),
             tags=tags,
             metadata=metadata,
+            description=(r.get("description") or "").strip(),
         ))
     behaviors = [Behavior(user_id=int(x["user_id"]),
                           resource_id=int(x["resource_id"]),

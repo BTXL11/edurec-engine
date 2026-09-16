@@ -1,0 +1,768 @@
+
+
+===== PAGE 1 =====
+2026 Third International Conference on Networking and Communications (ICNWC2026)
+CourseHub: A Semantic Course Recommendation 
+Framework Using Transformer-Based Embeddings
+R. S. Ponmagal
+Department of Computing Technologies
+Sujai R
+Department of Computing Technologies
+Annem Naga Dheemanth Reddy
+Department of Computing Technologies
+SRM Institute of Science and Technology SRM Institute of Science and Technology SRM Institute of Science and Technology
+Chennai, India 
+ponmagas@srmist.edu.in
+Chennai, India 
+sujaiofficial004@gmail.com
+Chennai, India 
+dheemanthreddy4747@gmail.com
+Abstract—Online  learning  platforms  host  an  extensive  and 
+rapidly  growing  collection  of  educational  content,  making  it 
+increasingly difficult for learners to identify relevant courses. 
+This paper presents CourseHub, a cross-platform course recom- 
+mendation 
+framework 
+that 
+leverages 
+transformer-based 
+semantic embeddings to align learner intent with appropriate 
+educational resources. The proposed system utilizes the all-
+MiniLM-L6- v2 model to generate 384-dimensional embeddings 
+for  course  content,  enabling  efficient  semantic  similarity 
+computation  using  cosine  similarity.  To  improve 
+recommendation quality, a hybrid ranking strategy is employed 
+that  combines  semantic  relevance  with  normalized  quality 
+indicators  such  as  user  ratings  and  course  popularity. 
+Experimental  evaluation  demonstrates  that  CourseHub 
+significantly outperforms traditional keyword-based approaches, 
+achieving a Mean Reciprocal Rank (MRR) of 0.883, Hit Rate@5 
+of  92%,  and  NDCG@10  of  0.881.  Additionally,  the  system 
+maintains low latency (under 250 ms at the 95th per- centile) and 
+reduces the average course discovery-to-enrollment time by 43%. 
+These 
+results 
+highlight 
+the 
+effectiveness 
+of 
+semantic 
+representations in enhancing course discovery in modern educa- 
+tional platforms.
+Index Terms—Educational recommendation systems, semantic 
+embedding, transformer architectures, natural language process- 
+ing, information retrieval, MOOC platforms
+I. INTRODUCTION
+A. Motivation and Background
+Over the  last  decade, digital  education has transformed 
+learning in significant ways. What began as pilot distance 
+learning  programs  has  evolved  into  a  complex  and  vast 
+ecosystem of Massive Open Online Courses (MOOCs), with 
+millions of users worldwide [1]. Platforms offering the 
+greatest number of MOOCs include Coursera, Udemy, and 
+edX, which  cumulatively  provide  over  200,000  distinct 
+courses across almost every conceivable academic discipline.
+This abundance, however, creates an unexpected challenge. 
+When faced with thousands of apparently similar choices, 
+learners  encounter  what  psychologists  refer  to  as  choice 
+overload—a state of paralysis arising when decision-makers 
+must evaluate an excessive number of alternatives [2]. Liter- 
+ature indicates that prospective students spend approximately
+2.5 hours evaluating courses before enrolling, and nearly two 
+in five abandon their search without completing enrollment 
+[3].
+B. Core Challenges
+Current course discovery systems in EdTech platforms face 
+several fundamental limitations.
+First, there is excessive reliance on keyword search. Most 
+existing platforms employ exact or fuzzy string matching, 
+which fails to capture the semantic intent of learner queries. 
+Results for students interested in career transitions, prereq- 
+uisite knowledge, or skill development are often ranked by 
+keyword frequency rather than conceptual compatibility [4].
+Second, learners must navigate disjointed platform ecosys- 
+tems, 
+performing 
+multiple 
+searches 
+across 
+different 
+proprietary systems with varying interfaces and retrieval logic. 
+This frag- mentation imposes significant cognitive overhead 
+and hinders effective comparison of alternatives [5].
+Third, existing systems lack contextual intelligence. Con- 
+sider two students searching for machine learning courses: 
+one is a beginner who needs foundational training, while 
+the  other  is  an  experienced  practitioner  seeking  advanced 
+specialization [5].
+Fourth, while collaborative filtering performs well for pop- 
+ular courses with extensive enrollment histories, it struggles 
+with newly published content. This cold-start problem results 
+in inadequate visibility for new courses that lack historical 
+user interaction data [6].
+C. Research Contribution
+This 
+paper 
+presents 
+CourseHub, 
+a 
+semantic 
+recommendation  framework  designed  explicitly  to  address 
+these shortcomings. The major contributions are as follows:
+• A cross-platform aggregation system that integrates het- 
+erogeneous course metadata into a standardized represen- 
+tation schema.
+• Implementation  of  state-of-the-art  transformer  embed- 
+dings  to  extract  deep  semantic  relationships  between 
+learner queries and course content.
+• A multi-objective ranking algorithm that balances seman- 
+tic relevance with empirical quality signals.
+• Comprehensive empirical evaluation demonstrating sig- 
+nificant performance improvements over traditional ap- 
+proaches.
+• Analysis of real-world deployment characteristics, 
+includ- ing latency profiles and user experience metrics.
+979-8-3503-3600-9/26/$31.00 ©2026 IEEE
+2026 Third International Conference on Networking and Communications (ICNWC) | 979-8-3195-4298-4/26/$31.00 ©2026 IEEE | DOI: 10.1109/ICNWC68145.2026.11518402
+Authorized licensed use limited to: Nanjing Univ of Post & Telecommunications. Downloaded on September 15,2026 at 14:25:24 UTC from IEEE Xplore.  Restrictions apply. 
+
+
+===== PAGE 2 =====
+2026 Third International Conference on Networking and Communications (ICNWC2026)
+II. RELATED WORK
+A. Recommendation System Fundamentals
+Recommendation systems have progressed through distinct 
+evolutionary 
+phases. 
+Early 
+approaches 
+centred 
+on 
+collaborative  filtering,  which  identifies  patterns  in  user 
+behaviour to predict preferences [7]. While effective given 
+sufficient  interaction  data,  collaborative  methods  face 
+significant  challenges with new items or users—the  well-
+documented cold-start prob- lem [7].
+Content-based filtering emerged as an alternative paradigm, 
+generating  recommendations  based  on  item  characteristics 
+rather than behavioural patterns. Classic implementations em- 
+ployed TF-IDF vectorisation of textual descriptions [8]. How- 
+ever, while  TF-IDF excels at  exact  keyword matching, it 
+cannot capture semantic relationships between conceptually 
+similar but lexically distinct terms.
+Hybrid recommendation systems that combine multiple ap- 
+proaches have proven more effective. These systems are well 
+suited for educational settings because they incorporate both 
+content characteristics and auxiliary signals such as ratings, 
+difficulty levels, instructor credentials, and user feedback [9].
+B. Transformer Models and Semantic Embeddings
+The  Transformer architecture revolutionised natural  lan- 
+guage processing upon its introduction [10]. Unlike earlier 
+recurrent neural network models, Transformers employ self- 
+attention to dynamically weight word importance during se- 
+mantic encoding, yielding substantial improvements in con- 
+textual understanding.
+BERT extended this by applying bidirectional pre-training, 
+allowing the model to consider both preceding and following 
+context simultaneously [11]. However, BERT’s original 
+design  was  optimised  for  classification  tasks  rather  than 
+similarity computation.
+Sentence-BERT  addressed  this  limitation  by  modifying 
+BERT’s training methodology using Siamese network struc- 
+tures, producing embeddings where semantically related sen- 
+tences occupy proximate positions in vector space [12]. This 
+breakthrough enabled efficient semantic similarity computa- 
+tion through cosine distance calculations.
+Subsequent studies focused on model compression tech- 
+niques that maintain performance while reducing computa- 
+tional requirements. The MiniLM model family, including the 
+all-MiniLM-L6-v2 model deployed in CourseHub, achieves 
+comparable  results  with  substantially  lower  computational 
+overhead [13]. The education sector has increasingly demon- 
+strated  the  utility  of  transformer  models  in  understanding 
+learner intent, with applications spanning curriculum design, 
+intelligent tutoring systems, and personalised learning path 
+generation [14], [15].
+C. EdTech and Course Recommendation Systems
+Recommender systems for e-learning typically fall into two 
+categories: those designed for learners with special require- 
+ments and those intended for general use. Educational recom- 
+mendations 
+must 
+account 
+for 
+prerequisites, 
+learning 
+objectives,
+and  sequencing  that  may  influence  the  effectiveness  of  a 
+recommended course of study [14].
+Deep learning methods have recently been applied to 
+educa-  tional 
+recommendations. 
+Recent 
+studies 
+have 
+employed graph-  based  neural  architectures  for  modelling 
+student-content rela- tionships, attention-based approaches for 
+capturing temporal dynamics of learning, and multi-objective 
+learning frameworks for jointly optimising engagement and 
+learning outcomes [15].  Despite  these  advances,  most 
+documented approaches rely on extensive usage history from 
+a single platform, leaving a gap in systems capable of serving 
+users with limited behavioural data across multiple platforms.
+D. Semantic Search in Educational Contexts
+Semantic  search  techniques  are  well  established  within 
+educational technology. Prior work has applied semantic em- 
+bedding techniques to scholarly article recommendation, ed- 
+ucational resource alignment, and curriculum mapping [15]. 
+Hybrid architectures that combine content features with aux- 
+iliary signals such as ratings, difficulty levels, and instructor 
+credentials are increasingly effective. Research on educational 
+search  behaviour  has  found  that  successful  learners  often 
+describe their goals in terms of career objectives or skills 
+they wish to acquire, rather than using specific course titles. 
+Semantic methods are well suited for such queries, as they 
+can match diverse expressions of learner intent with relevant 
+educational content.
+III. SYSTEM ARCHITECTURE
+CourseHub adopts a modular architecture organised into 
+four principal layers, each handling specific responsibilities 
+within  the  recommendation  pipeline.  Fig.  1  illustrates  the 
+complete system design and data flow. The pipeline operates 
+as follows: raw course data is ingested and normalised in 
+Layer 1, semantically encoded into vector representations in 
+Layer 2, ranked against a user query in Layer 3, and presented 
+through the web interface in Layer 4. Each layer passes its 
+output directly to the next, ensuring a clear and reproducible 
+flow from raw data to final recommendation.
+A. Data Ingestion and Normalization
+The base layer handles data collection and standardisa- 
+tion from multiple platforms. The current system integrates 
+four major providers—Coursera, Udemy, edX, and Udacity— 
+which collectively account for approximately 85% of the total 
+MOOC market by enrolled student count.
+Data Collection: Course metadata was retrieved program- 
+matically via each platform’s publicly accessible API or struc- 
+tured web interface in October 2024. For platforms without a 
+formal API, structured HTTP requests with appropriate rate 
+limiting were  used to collect  course  listings, descriptions, 
+ratings, and enrollment figures.
+Deduplication: Because the same course occasionally ap- 
+pears  across  multiple  platforms  (e.g.,  a  university  course 
+listed on both Coursera and edX), we applied a two-stage 
+deduplication strategy. First, exact matches on course title
+979-8-3503-3600-9/26/$31.00 ©2026 IEEE
+Authorized licensed use limited to: Nanjing Univ of Post & Telecommunications. Downloaded on September 15,2026 at 14:25:24 UTC from IEEE Xplore.  Restrictions apply. 
+
+
+===== PAGE 3 =====
+2026 Third International Conference on Networking and Communications (ICNWC2026)
+making it the preferred choice for a deployment environment 
+with  constrained  computational  resources.  This  tradeoff 
+between representation quality and computational efficiency 
+is consistent with findings reported by Wang et al. [13].
+The selected model comprises six transformer encoder lay- 
+ers, each with 384 hidden dimensions and twelve attention 
+heads, totalling approximately 80 million parameters and pro- 
+ducing 384-dimensional embedding vectors. For each course, 
+a composite textual representation is formed by concatenating 
+the course title and description. Preprocessing involves con- 
+verting text to lowercase, stripping HTML markup, normal- 
+ising special characters, collapsing excessive whitespace, and 
+truncating to 512 tokens. All course embeddings are computed 
+offline at system initialisation, incurring no per-query cost.
+C. Search and Ranking Pipeline
+Upon receiving a user query, the system executes a multi- 
+stage recommendation pipeline. The query undergoes the 
+same preprocessing and encoding as course content, yielding a 
+384-  dimensional  vector.  Semantic  proximity  between  the 
+query and each course embedding is then computed using 
+cosine similarity:
+Fig. 1. CourseHub System Architecture
+sim(q, c ) =   q · ci 
+i
+q ci
+(1)
+and instructor name were removed. Second, near-duplicate 
+detection was performed using cosine similarity on TF-IDF 
+vectors of course descriptions; pairs with similarity exceeding
+0.92 were flagged for manual review and consolidated.
+Schema Normalisation:  Each platform exposes metadata 
+in  different  formats  and  field  names.  A  set  of  platform- 
+specific 
+extractor 
+modules 
+maps 
+heterogeneous 
+representations  into  a  common  internal  schema  with 
+standardised fields for title, description, provider, duration, 
+rating, enrollment count, subject category, and price.
+After ingestion and deduplication, the final dataset com- 
+prised 10,247 courses.
+B. Semantic Encoding Engine
+The 
+encoding 
+engine 
+transforms 
+textual 
+course 
+content  into  dense  vector  representations  that  capture 
+semantic  meaning.  Model  selection  was  made  after 
+empirically 
+ comparing 
+ three 
+ candidate 
+ models: 
+all-MiniLM-L6-v2, all-mpnet-base-v2 (MPNet), 
+and paraphrase-MiniLM-L6-v2  (a SBERT variant). 
+Evaluation was conducted on a held-out set of 50 
+manually 
+constructed 
+query–course 
+relevance 
+pairs. 
+all-MiniLM-L6-v2  achieved a Spearman correlation 
+of 0.81 between predicted and human-annotated similarity 
+scores, compared to 0.83 for MPNet and 0.79 for the 
+SBERT variant. Although MPNet yielded a marginally higher 
+correlation, all-MiniLM-L6-v2 required approximately
+2.4× less inference time (18 ms vs. 43 ms per batch of
+64 sentences on CPU) and consumed 60% less memory,
+where q is the query embedding and ci is the embedding 
+for course i.
+Rather than relying exclusively on semantic similarity, the 
+system employs a weighted composite scoring function:
+scorei = w1 · sim(q, ci) + w2 · rˆi + w3 · pˆi
+(2)
+where  w1,  w2, and  w3 are weighting factors for semantic 
+similarity, normalised rating, and normalised popularity, re- 
+spectively.
+Weight Selection via Grid Search:  The  validation set 
+used for weight optimisation consisted of 200 queries con- 
+structed to reflect diverse learner intent: 50 career-transition 
+queries, 80 skill-acquisition queries, 40 exploratory queries 
+from novice learners, and 30 advanced specialisation queries. 
+For each query, the top-10 results were manually annotated 
+by two independent  annotators on a  three-point  relevance 
+scale. NDCG@10 was used as the optimisation objective. A
+grid search was performed over w1 
+ {
+∈0.5, 0.6, 0.7, 0.8}, 
+w2 ∈ {0.1, 0.2, 0.3}, and w3 ∈ {0.05, 0.1, 0.15}, subject 
+to w1 + w2 + w3 = 1. The combination (w1, w2, w3) =
+(0.7, 0.2, 0.1) yielded the highest mean NDCG@10 of 0.871 
+on the validation set and was adopted for all reported experi- 
+ments.
+For rating normalisation, min-max scaling maps all ratings 
+to the  [0, 1]  interval. To address the skewed distribution of 
+enrollments, logarithmic transformation is applied:
+     log(1
+ 
+  +   enrollments
+ 
+ i)     
+pˆi =
+(3)
+log(1 + max(enrollments))
+979-8-3503-3600-9/26/$31.00 ©2026 IEEE
+Authorized licensed use limited to: Nanjing Univ of Post & Telecommunications. Downloaded on September 15,2026 at 14:25:24 UTC from IEEE Xplore.  Restrictions apply. 
+
+
+===== PAGE 4 =====
+2026 Third International Conference on Networking and Communications (ICNWC2026)
+D. Presentation Interface
+The presentation layer is built using Next.js 14 and React 
+18, providing responsive, server-side-rendered user interfaces. 
+The backend is a RESTful API built on the FastAPI frame- 
+work, optimised for asynchronous requests. FastAPI automati- 
+cally generates OpenAPI schema documentation and validates 
+requests, simplifying development and third-party integration.
+IV. IMPLEMENTATION DETAILS
+A. Dataset Characteristics
+The evaluation dataset comprises 10,247 courses collected 
+in October 2024 from the four platforms described in Sec- 
+tion III-A. Table I presents descriptive statistics of the key 
+attributes.
+TABLE I
+COURSE DATASET DESCRIPTIVE STATISTICS
+Attribute
+Mean
+Std Dev
+Duration (hours)
+18.3
+24.7
+Rating (0–5 scale)
+4.31
+0.42
+Review Count
+1,247
+3,856
+Price (USD)
+47.80
+58.30
+Description Length (chars)
+823
+486
+The dataset exhibits considerable variation in course char- 
+acteristics. Duration ranges from short 30-minute modules to 
+extensive programmes exceeding 100 hours. The mean rating 
+of 4.31 (SD = 0.42) may reflect rating inflation prevalent 
+on MOOC platforms. Subject distribution is dominated by
+facebook/dpr-question_encoder-single-nq-base 
+checkpoint, fine-tuned on question–answer pairs, as a 
+representative modern neural retrieval baseline.
+ColBERT (Contextual Late Interaction) [17] is a neural 
+retrieval  model  that  produces  token-level  embeddings  and 
+scores query–document pairs via a late interaction mechanism, 
+offering a stronger embedding-based comparison point than 
+single-vector approaches.
+The test set consists of 300 queries spanning four intent 
+categories: career transition (25%), skill acquisition (40%), 
+exploration by novice learners (20%), and advanced speciali- 
+sation (15%). The top-10 results per query were annotated by 
+three independent human annotators on a three-point 
+relevance  scale (highly relevant, somewhat relevant, not 
+relevant). Inter-  annotator  agreement,  measured  by  Fleiss’ 
+Kappa, was 0.78, indicating substantial agreement.
+Performance  is  assessed  using  Mean  Reciprocal  Rank 
+(MRR), Hit Rate@K, and Normalised Discounted Cumulative 
+Gain at K (NDCG@K).
+V. EXPERIMENTAL RESULTS
+A. Retrieval Quality Comparison
+Table II presents the performance comparison across all 
+evaluation metrics.
+TABLE II
+PERFORMANCE COMPARISON ACROSS METHODS
+Technology and IT (41.1%), followed by Business (23.3%),
+                                                                                                     
+Personal Development (14.2%), Design (9.6%), and Health 
+and Fitness (5.3%), with the remaining 6.5% spanning other 
+disciplines.
+B. Experimental Configuration
+CourseHub was deployed on Railway App, a platform-as- 
+a-service provider offering containerised application hosting, 
+configured with 2 virtual CPU cores (Intel Xeon), 4 GB 
+DDR4 RAM, and 20 GB SSD storage. The software stack 
+com- prises Ubuntu 22.04 LTS, Python 3.10.12, FastAPI 
+0.104.1,
+SentenceTransformers 2.2.2, and MongoDB 7.0.
+C. Evaluation Methodology
+We  compare  CourseHub  against  four  baseline  methods 
+representing  a  spectrum  from  classical  to  neural  retrieval 
+approaches.
+BM25 applies probabilistic retrieval with standard 
+param- eters (k1 =  1.5,  b  =  0.75). It remains a strong 
+keyword- matching baseline underlying many commercial 
+search en- gines.
+TF-IDF with cosine similarity represents documents and 
+queries as term-frequency vectors and ranks results by cosine 
+distance.
+DPR  (Dense  Passage  Retrieval)  [16]  is  a  bi-encoder 
+neural retrieval model that encodes queries and documents 
+independently into dense vectors. We use the publicly 
+available
+Metric
+BM25
+TF-IDF
+DPR
+ColBERT
+CourseHub
+MRR
+0.624
+0.701
+0.791
+0.831
+0.883
+HR@5
+74.3%
+81.7%
+85.3%
+88.7%
+92.0%
+HR@10
+86.0%
+90.3%
+92.7%
+94.3%
+97.3%
+NDCG@5
+0.691
+0.748
+0.803
+0.832
+0.864
+NDCG@10
+0.723
+0.779
+0.821
+0.851
+0.881
+CourseHub achieves the highest scores across all metrics. 
+The MRR of 0.883 represents a 41.5% relative improvement 
+over BM25 and a 6.3% improvement over ColBERT, the 
+strongest neural baseline.
+Statistical Significance: To validate the reported gains, we 
+applied a paired two-tailed Wilcoxon signed-rank test [18] 
+on per-query NDCG@10 scores across all 300 test queries. 
+CourseHub’s improvement over BM25 (p < 0.001), TF-
+IDF (p < 0.001), DPR (p = 0.003), and ColBERT (p = 
+0.021)
+is statistically significant at the α = 0.05 level. Addition- 
+ally, 95% bootstrap confidence intervals (1,000 resamples) 
+for MRR are: BM25 [0.601, 0.647], TF-IDF [0.679, 0.723],
+DPR [0.771, 0.811], ColBERT [0.812, 0.850], and CourseHub
+[0.864, 0.901], confirming that the observed improvements do 
+not overlap and are robust to sampling variation.
+The consistency of CourseHub’s advantage across both cut- 
+off levels (K=5 and K=10) indicates that improvements reflect 
+genuine superiority in ranking quality rather than sensitivity 
+to a specific evaluation threshold.
+979-8-3503-3600-9/26/$31.00 ©2026 IEEE
+Authorized licensed use limited to: Nanjing Univ of Post & Telecommunications. Downloaded on September 15,2026 at 14:25:24 UTC from IEEE Xplore.  Restrictions apply. 
+
+
+===== PAGE 5 =====
+2026 Third International Conference on Networking and Communications (ICNWC2026)
+B. Model Performance Comparison
+Fig.  2  presents  a  graphical  comparison  of  CourseHub 
+against the keyword-based baselines on three key metrics. The
+0.95 scores on NDCG@5 and Precision@5 indicate that the 
+most relevant courses are consistently surfaced within the top 
+five positions. The Recall@5 of 0.52, while comparatively 
+modest, is an intentional consequence of optimising for preci- 
+sion in top-ranked positions rather than exhaustive retrieval— 
+consistent with observed user behaviour patterns in which 
+users engage primarily with the first few recommendations.
+Fig. 2. Model Performance Comparison
+C. Similarity Score Distribution Analysis
+Fig. 3 illustrates the distribution of cosine similarity scores 
+between user queries and matched courses in the evaluation 
+dataset.
+Fig. 3. Similarity Score Distribution
+The distribution exhibits several noteworthy characteristics. 
+Quantitatively, 68.4% of all query–course pairs yield cosine 
+similarity scores in the 0.0–0.2 range, confirming that the 
+majority of the corpus is semantically distant from any given 
+query. This mass of low-scoring pairs plays a critical filtering 
+role: by applying a similarity threshold of 0.25, the candidate
+pool is reduced by approximately 71% before the composite 
+scoring  function  is  applied,  substantially  reducing  ranking 
+computation. The right tail of the distribution (scores > 0.5) 
+accounts for 8.2% of pairs and corresponds closely to the 
+annotator-labelled “highly relevant” category; the precision 
+of the embedding space in isolating this tail from the bulk 
+of the  distribution is a key factor in CourseHub’s strong 
+NDCG performance. The gradual decay of the tail (skewness
+= 1.74) confirms that the embedding space encodes graded 
+levels of semantic relatedness rather than producing a binary 
+relevant/irrelevant separation.
+D. Rank Position Relevance Analysis
+Fig. 4 presents mean relevance scores for ranking positions 
+1–10.
+Fig. 4. Recommendation Rank vs. Relevance
+Positions 1 and 3–6 consistently achieve mean relevance 
+scores at or near 1.0, demonstrating that the composite 
+ranking function reliably surfaces the most relevant courses at 
+the top of the list. The anomalous dip at position 2 (mean 
+relevance = 0.75) warrants attention: inspection of affected 
+queries reveals that 14 of the 23 cases in which position 2 
+was rated below
+1.0 involved courses that addressed complementary rather 
+than  directly  equivalent  topics  (e.g.,  a  query  for  “data 
+visualisa- tion” returning a statistics course at rank 2). This 
+suggests that the composite scoring function occasionally 
+over-weights popularity for courses with high enrollment but 
+tangential content. Positions 7–8 show a modest but expected 
+decline  (mean  relevance  0.75–0.88),  reflecting  reduced 
+confidence  in  matches  further  down  the  ranked  list.  The 
+partial  recovery  at  positions 9–10 (mean relevance 0.88) 
+indicates that the system can surface topically diverse but still 
+relevant  courses  in  later  positions,  supporting  breadth  of 
+recommendation alongside precision.
+E. Qualitative Analysis
+For the query “unsupervised learning techniques,” Course- 
+Hub’s  top  result  was  “Clustering  and  Dimensionality  Re- 
+duction” (similarity = 0.847), despite zero lexical overlap
+979-8-3503-3600-9/26/$31.00 ©2026 IEEE
+Authorized licensed use limited to: Nanjing Univ of Post & Telecommunications. Downloaded on September 15,2026 at 14:25:24 UTC from IEEE Xplore.  Restrictions apply. 
+
+
+===== PAGE 6 =====
+2026 Third International Conference on Networking and Communications (ICNWC2026)
+beyond the  word “learning.”  BM25 ranked this course  at 
+position 23. For the career-oriented query “I want to become a 
+data scientist,” CourseHub produced a coherent learning path- 
+way spanning foundational Python programming, statistical 
+methods, and machine learning courses. For “build mobile 
+apps,” CourseHub surfaced courses covering React Native, 
+Flutter, Swift, and Kotlin. These examples demonstrate the 
+system’s capacity to identify synonyms, conceptual relation- 
+ships, and prerequisite structures—capabilities absent from 
+keyword-based methods.
+F. Component Contribution Analysis
+Table III presents an ablation study examining the contri- 
+bution of individual components.
+TABLE III
+ABLATION STUDY RESULTS
+Configuration
+MRR
+HR@5
+Full System
+0.883
+92.0%
+Without rating weight
+0.861
+90.3%
+Without popularity weight
+0.877
+91.7%
+Pure semantic (no quality)
+0.854
+89.0%
+Equal weights (0.33 each)
+0.868
+90.7%
+Removing quality signals (ratings and popularity) reduces 
+MRR by 2.9–3.3 percentage points, confirming their comple- 
+mentary value alongside semantic similarity. The rating 
+weight  contributes  more  than  the  popularity  weight, 
+suggesting that user ratings are a stronger proxy for course 
+quality than raw enrollment counts.
+G. User Experience Metrics
+A small-scale user study was conducted to evaluate 
+usability and practical effectiveness.
+Participant Selection:  Twenty-four participants were re- 
+cruited via a university mailing list. Eligibility criteria 
+required that participants: (a) had used at least one MOOC 
+platform  in  the  preceding  six  months,  (b)  were  currently 
+seeking to learn a new skill or transition to a new career 
+domain, and (c) represented a range of technical backgrounds 
+(12 participants self-identified as technical/STEM users; 12 as 
+non-technical users). Informed consent was obtained from all 
+participants prior to the study.
+Experimental Protocol:  Each participant completed two 
+course-search tasks using CourseHub and two equivalent tasks 
+using  a  native  platform  search  interface  (counterbalanced 
+across participants to control for order effects). Tasks were 
+designed to represent realistic learning goals, such as “find a 
+course to help me transition into data analytics” and “find 
+a beginner course on graphic design.” Each session lasted 
+approximately 30 minutes.
+Evaluation Questionnaire: After completing all tasks, par- 
+ticipants responded to a structured questionnaire comprising 
+seven  items  measured  on  a  five-point  Likert  scale.  Items 
+assessed: result relevance, ease of query formulation, interface
+intuitiveness, cross-platform comparison utility, overall satis- 
+faction, time efficiency, and likelihood of re-use. Two open- 
+ended questions invited participants to describe the most and 
+least useful aspects of each system.
+Findings: 87.5% of participants rated CourseHub as more 
+effective than native platform search. The mean time from 
+first search to course enrollment decreased to 24 minutes—a 
+43% reduction compared to the 42-minute baseline. The 
+cross- platform comparison feature was rated highly useful by 
+79.2% of participants, and 91.7% found the natural language 
+interface intuitive.
+VI. LIMITATIONS
+Although CourseHub achieves strong results, several limi- 
+tations remain. The system does not incorporate personalised 
+user modelling, which may reduce adaptability to individual 
+learner preferences. The dataset, while large, is a sample of 
+available course offerings and may not fully represent the 
+diversity of all MOOC platforms. Future work will address 
+these limitations by incorporating user interaction data and 
+expanding platform coverage.
+VII. CONCLUSION
+This paper introduced CourseHub, a semantic course 
+recom- mendation framework that addresses key limitations of 
+existing  educational  search  systems.  By  combining 
+transformer-based embeddings with a multi-objective ranking 
+algorithm, Course- Hub achieves substantial improvements 
+over both classical and modern neural retrieval baselines, as 
+validated by statis- tically significant results across multiple 
+evaluation metrics. CourseHub attained an MRR of 0.883, Hit 
+Rate@5 of 92%, and NDCG@10 of 0.881. User study results 
+confirm practical utility, with participants reporting a 43% 
+reduction in search- to-enrollment time and high satisfaction 
+scores.  Future  work  will  investigate  personalised  ranking 
+incorporating  individual  learner  profiles,  integration  of 
+additional quality signals such as course completion rates and 
+skill outcomes, and multilin- gual support for global course 
+discovery.
+REFERENCES
+[1] A. Bozkurt et al., “A global outlook to the interruption of education due 
+to COVID-19 pandemic: Navigating in a time of uncertainty and crisis,” 
+Asian Journal of Distance Education, vol. 15, no. 1, pp. 1–126, 2020.
+[2] S. S. Iyengar and M. R. Lepper, “When choice is demotivating: Can one 
+desire too much of a good thing?”  Journal of Personality and Social 
+Psychology, vol. 79, no. 6, pp. 995–1006, 2000.
+[3] F. Dalipi, A. S. Imran, and Z. Kastrati, “MOOC dropout prediction 
+using machine learning techniques: Review and research challenges,” 
+IEEE Access, vol. 9, pp. 118847–118869, 2021.
+[4] L. Chen, P. Chen, and Z. Lin, “Artificial intelligence in education: A 
+review,” IEEE Access, vol. 10, pp. 75264–75278, 2022.
+[5] M. Khalil and M. Ebner, “Clustering patterns of engagement in massive 
+open online courses: The use of learning analytics to reveal student 
+categories,” Journal of Computing in Higher Education, vol. 33, no. 1,
+pp. 151–172, 2021.
+[6] Y. Zhou et al., “A survey on neural recommendation: From collabora- 
+tive filtering to content and context enriched recommendation,”  IEEE 
+Transactions on Knowledge and Data Engineering, vol. 35, no. 5, pp. 
+4425–4445, 2021.
+[7] S. Zhang, L. Yao, A. Sun, and Y. Tay, “Deep learning based rec- 
+ommender system: A survey and new perspectives,” ACM Computing 
+Surveys, vol. 52, no. 1, pp. 1–38, 2020.
+979-8-3503-3600-9/26/$31.00 ©2026 IEEE
+Authorized licensed use limited to: Nanjing Univ of Post & Telecommunications. Downloaded on September 15,2026 at 14:25:24 UTC from IEEE Xplore.  Restrictions apply. 
+
+
+===== PAGE 7 =====
+2026 Third International Conference on Networking and Communications (ICNWC2026)
+[8] J. Tang and K. Wang, “Personalized top-n sequential recommendation 
+via convolutional sequence embedding,” ACM Transactions on 
+Informa- tion Systems, vol. 39, no. 1, pp. 1–27, 2021.
+[9] M. Descheˆnes, “Recommender systems to support learners’ agency 
+in a learning context: A systematic review,”  International Journal of 
+Educational Technology in Higher Education, vol. 17, no. 1, pp. 1–23, 
+2020.
+[10] A. Vaswani et al., “Attention is all you need,” in Proc. 31st Int. Conf. 
+Neural Information Processing Systems, 2017, pp. 6000–6010.
+[11] J. Devlin, M.-W. Chang, K. Lee, and K. Toutanova, “BERT: Pre-
+training of deep bidirectional transformers for language understanding,” 
+in Proc. NAACL-HLT, 2019, pp. 4171–4186.
+[12] N. Reimers and I. Gurevych, “Sentence-BERT: Sentence embeddings 
+using siamese BERT-networks,” in  Proc. EMNLP-IJCNLP, 2019, pp. 
+3982–3992.
+[13] W. Wang et al., “MiniLM: Deep self-attention distillation for task- 
+agnostic compression of pre-trained transformers,” in Advances in Neu- 
+ral Information Processing Systems, vol. 33, 2020, pp. 5776–5788.
+[14] V. Swamy et al., “Evaluating the explainers: Black-box explainable 
+machine learning for student success prediction in MOOCs,” in Proc. 
+15th Int. Conf. Educational Data Mining, 2022, pp. 98–109.
+[15] J. K. Tarus, Z. Niu, and B. Yousif, “A hybrid knowledge-based recom- 
+mender system for e-learning based on ontology and sequential pattern 
+mining,” Future Generation Computer Systems, vol. 72, pp. 37–48, 
+2021.
+[16] V. Karpukhin et al., “Dense passage retrieval for open-domain question 
+answering,” in Proc. EMNLP, 2020, pp. 6769–6781.
+[17] O. Khattab and M. Zaharia, “ColBERT: Efficient and effective passage 
+search via contextualized late interaction over BERT,” in  Proc. ACM 
+SIGIR, 2020, pp. 39–48.
+[18] F. Wilcoxon, “Individual comparisons by ranking methods,” Biometrics 
+Bulletin, vol. 1, no. 6, pp. 80–83, 1945.
+[19] Y. Li et al., “A survey of large language models for education: 
+From  foundation  models  to  knowledge  distillation,”  arXiv  preprint 
+arXiv:2309.12892, 2023.
+[20] S. Dai et al., “AugESC: Dialogue augmentation with large language 
+models for emotional support conversation,” in  Proc. ACL Findings, 
+2023, pp. 1599–1611.
+[21] H.  Zhang  et  al.,  “Semantic  retrieval  in  educational  platforms:  A 
+transformer-based approach to cross-domain course search,” Computers 
+& Education: Artificial Intelligence, vol. 6, p. 100189, 2024.
+[22] Z. Wang et al., “Knowledge graph-enhanced course recommendation 
+with contrastive learning,” Expert Systems with Applications, vol. 238,
+p. 121788, 2024.
+[23] Y. Su et al., “LLM-enhanced collaborative filtering for MOOC course 
+recommendation,” in Proc. ACM WebConf, 2024, pp. 3421–3430.
+979-8-3503-3600-9/26/$31.00 ©2026 IEEE
+Authorized licensed use limited to: Nanjing Univ of Post & Telecommunications. Downloaded on September 15,2026 at 14:25:24 UTC from IEEE Xplore.  Restrictions apply. 

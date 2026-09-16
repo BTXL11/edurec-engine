@@ -1,0 +1,1260 @@
+
+
+===== PAGE 1 =====
+Uncertainty-aware Knowledge Tracing
+Weihua Cheng1, Hanwen Du2, Chunxiao Li3, Ersheng Ni4, Liangdi Tan1, Tianqi Xu3, Yongxin Ni3*
+1ShanghaiTech University, Shanghai, China
+2Soochow University, Suzhou, China
+3University of Science and Technology of China, Hefei, China
+4The University of Queensland, Brisbane, Australia
+chengwh2024@shanghaitech.edu.cn, hwdu@stu.suda.edu.cn, chunxiao.li@ustc.edu.cn, nelson.2044474491@outlook.com,
+tanld2022@shanghaitech.edu.cn, xutianqi@mail.ustc.edu.cn, niyongxin2016@gmail.com
+Abstract
+Knowledge Tracing (KT) is crucial in education assessment,
+which focuses on depicting students’ learning states and as-
+sessing students’ mastery of subjects. With the rise of mod-
+ern online learning platforms, particularly massive open on-
+line courses (MOOCs), an abundance of interaction data has
+greatly advanced the development of the KT technology. Pre-
+vious research commonly adopts deterministic representation
+to capture students’ knowledge states, which neglects the un-
+certainty during student interactions and thus fails to model
+the true knowledge state in learning process. In light of this,
+we propose an Uncertainty-Aware Knowledge Tracing model
+(UKT) which employs stochastic distribution embeddings
+to represent the uncertainty in student interactions, with a
+Wasserstein self-attention mechanism designed to capture the
+transition of state distribution in student learning behaviors.
+Additionally, we introduce the aleatory uncertainty-aware
+contrastive learning loss, which strengthens the model’s ro-
+bustness towards different types of uncertainties. Extensive
+experiments on six real-world datasets demonstrate that UKT
+not only significantly surpasses existing deep learning-based
+models in KT prediction, but also shows unique advantages
+in handling the uncertainty of student interactions.
+Code — https:
+//github.com/UncertaintyForKnowledgeTracing/UKT
+Introduction
+Knowledge Tracing (KT) is crucial in educational assess-
+ment, which tracks students’ knowledge mastery by mod-
+eling dynamic knowledge states through continuous analy-
+sis of student interactions. It aids educators and platforms
+in evaluating abilities and personalizing learning paths for
+deeper knowledge absorption. With the growth of online ed-
+ucation, platforms like MOOCs have generated vast interac-
+tion data, enriching training material for machine learning
+models. Nevertheless, the learning process is prolonged and
+variable, with each interaction characterized by uncertainty.
+This underscores the need for constructing KT models that
+can effectively handle the complexity of interactions. Pre-
+vious studies often use fixed embeddings to model student-
+course interactions. For instance, DKT (Piech et al. 2015)
+*Corresponding author.
+Copyright © 2025, Association for the Advancement of Artificial
+Intelligence (www.aaai.org). All rights reserved.
+KCs
+Questions
+Responses
+⋯
+C1
+C2
+C3
+C4
+C5
+Oberved 
+Knowledge State
+Expected 
+Knowledge State
+Deterministic Method
+Stochastic Method
+𝑐2
+𝑐1
+𝑐5
+𝑐3
+𝑐4
+𝑐1 𝑐2
+𝑐4
+𝑐3
+Observed 
+Knowledge State 
+Expected
+Knowledge State
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+xx
+x x
+x
+x
+x
+x
+x
+x x
+x
+x
+x
+Figure 1: The impact of uncertainty on knowledge state un-
+der deterministic and stochastic modeling.
+converts student interactions into fixed-length vectors us-
+ing one-hot encodings or compressed representations. AKT
+(Choi et al. 2020) integrates concept embeddings, question
+difficulty, and response embeddings to capture the relation-
+ship between students’ knowledge and questions. Addition-
+ally, various methods have emerged to apply neural compo-
+nents to capture forgetting behaviors (Nagatani et al. 2019),
+recency effects (Zhang et al. 2021), and other auxiliary in-
+formation, e.g., question-KC relations (Pandey and Srivas-
+tava 2020; Yang et al. 2021), question text (Liu et al. 2019),
+and learning ability (Shen et al. 2022). However, these meth-
+ods assume that student behavior is solely determined by
+their current knowledge level, as they simply infer students’
+knowledge state from previous answers but overlook the
+stochastic factors in the learning process.
+In educational environments, various factors can affect
+student performance, leading to uncertainties in knowledge
+assessments. These uncertainties arise from differences in
+learning ability, adaptability, and personal circumstances.
+Among them, epistemic uncertainty helps models more ac-
+curately assess a student’s true knowledge level, reflecting
+cognitive differences. In contrast, factors such as careless
+errors or lucky guesses are sourced from aleatory uncer-
+tainty, which may mislead model assessment. Such uncer-
+tainties are commonplace, given that students often demon-
+strate diverse levels of knowledge within the same sequence
+of interactions, with instances of misconduct that frequently
+arXiv:2501.05415v2  [cs.LG]  21 Jan 2025
+
+
+===== PAGE 2 =====
+𝑐2
+𝑐1
+𝑐5
+𝑐3
+𝑐4
+𝑐4
+𝑐1 𝑐2
+KCs
+Questions
+Responses
+careless
+KCs
+Questions
+Responses
+𝑐2
+𝑐1
+𝑐5
+𝑐3
+𝑐4
+𝑐4
+𝑐1 𝑐2
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+x
+Figure 2: The impact of aleatory uncertainty on knowledge
+state under stochastic modeling. KCs are the knowledge
+concepts involved in the given questions.
+deviate from their true abilities. As shown in Figure 1, dif-
+ferences in learning ability can cause deviations from the
+expected knowledge state in deterministic methods.
+Capturing uncertainties can enable more personalized as-
+sessments of student learning. However, not all uncertain-
+ties are beneficial for learning assessments. While capturing
+epistemic uncertainty aids in improving assessments, the in-
+troduction of other uncertainties, i.e., aleatory uncertainty,
+could potentially lead models to make biased judgments in
+the opposite direction. For instance, a student may guess the
+correct answer on a multiple-choice question or make cal-
+culation errors on problems they could otherwise solve cor-
+rectly due to carelessness. Such aleatory uncertainty does
+not accurately reflect students’ true knowledge levels, and
+including these interactions could lead models to incorrect
+conclusions. Therefore, to ensure an accurate representation
+of students’ knowledge mastery, it is crucial to enhance the
+model’s robustness against aleatory uncertainty while retain-
+ing the epistemic uncertainty.
+To tackle these problems, two key questions should be
+considered:
+• How to model students’ knowledge mastery with their
+uncertainties taken into consideration?
+• How to strengthen model robustness towards aleatory un-
+certainty while retaining the epistemic one?
+In light of this, this paper introduces Uncertainty-aware
+Knowledge Tracing (UKT) model to capture effective un-
+certainties in student behaviors. Specifically, UKT employs
+a stochastic method to depict the interaction history of each
+student as a Gaussian distribution, where the fundamen-
+tal knowledge level and uncertainties of each student are
+quantified by the mean and covariance respectively. Addi-
+tionally, to capture adjacent state transitions that represent
+the learning process, UKT proposes a Wasserstein distance
+(R¨uschendorf 1985) based self-attention mechanism tailored
+for knowledge tracing, modeling relationships between dis-
+tributions to monitor global changes rather than being lim-
+ited to comparisons of individual points.
+Note that the uncertainties captured before contain both
+the epistemic and aleatory ones. To prevent the model
+from being misled by aleatory uncertainty (as illustrated
+in Figure 2) and enhance its robustness in predicting
+knowledge mastery, we developed the aleatory uncertainty-
+aware contrastive learning mechanism. By constructing neg-
+ative samples that reflect aleatory-uncertainty examples, we
+strengthen the model’s robustness against biased distribu-
+tions. As a result, the model becomes less susceptible to
+anomalous behaviors and is better equipped to accurately
+capture students’ knowledge mastery.
+To the best of our knowledge, UKT is the first to explore
+uncertainty within the realm of Knowledge Tracing. Our key
+contributions are summarized as follows:
+• We propose to model students’ base knowledge levels
+and uncertainties through stochastic interaction learning,
+where each student is represented as a Gaussian distribu-
+tion with the mean and covariance embeddings represent-
+ing the corresponding mastery degree and uncertainty.
+• Through the construction of negative samples represent-
+ing both careless and lucky guesses in contrastive learn-
+ing, we offer a solution to retain epistemic uncertainty
+while enhancing model robustness to aleatory uncer-
+tainty.
+• We conduct extensive experiments on six datasets. The
+results indicate that the proposed method outperforms
+existing baselines in performance. Additionally, through
+additional experiments and analysis, we demonstrate that
+our method can effectively model epistemic uncertainty
+and exhibits strong robustness to aleatory uncertainty.
+Related Work
+Knowledge tracing aims to dynamically assess a learner’s
+mastery of knowledge, thereby customizing subsequent
+learning paths. The assessment is achieved by recording
+whether a student answers correctly to the given ques-
+tion. As a question commonly comprises specific knowledge
+points, the student’s answer to the question would reflect
+her/his understanding level of involved knowledge concepts.
+The role of a knowledge tracing model is to predict whether
+a student can answer correctly to the given question based
+on the learning of historical question-answering records, and
+a better KT model should exhibit stronger prediction capa-
+bility. Generally, knowledge tracing models can be broadly
+divided into five categories:
+Deep Sequential Models
+These deep sequential mod-
+els for knowledge tracing use auto-regressive architectures
+to capture students’ sequential interactions. For example,
+(Piech et al. 2015) introduces the Deep Knowledge Tracing
+(DKT) model, utilizing an LSTM layer to estimate knowl-
+edge mastery. (Lee and Yeung 2019) enhances DKT by in-
+corporating a skill encoder that combines student learning
+activities with knowledge component (KC) representations.
+Memory-Augmented Models
+These models leverage
+memory networks to capture latent relationships between
+KCs and students’ knowledge states. (Zhang et al. 2017) uti-
+lized a static key memory matrix to store KC relationships
+and a dynamic value memory matrix to predict students’
+knowledge mastery levels.
+
+
+===== PAGE 3 =====
+Adversarial Learning-Based Models
+These models em-
+ploy adversarial techniques to generate perturbations that
+improve the model’s generalization capability. For instance,
+(Guo et al. 2021) proposes an attentive LSTM KT model
+jointly trained with both original and adversarial examples.
+Graph-Based Models
+These methods use graph neu-
+ral networks to model intrinsic relationships among ques-
+tions, KCs, and interactions. (Liu et al. 2020) introduces a
+question-KC bipartite graph to explicitly capture the inner
+relations at the question, KC levels, and question difficulties.
+(Yang et al. 2021) employs a graph convolutional network to
+represent the correlations between questions and KCs.
+Attention-Based Models
+These models utilize the at-
+tention mechanism to capture dependencies between in-
+teractions. For example, SAKT (Pandey and Karypis
+2019) applies a self-attention network to capture the rel-
+evance between KCs and students’ historical interactions.
+SAINT (Choi et al. 2020) introduces an encoder-decoder
+structure to represent exercise and response embedding se-
+quences, while AKT (Ghosh, Heffernan, and Lan 2020) in-
+troduces three self-attention modules to explicitly model
+students’ forgetting behaviors using a monotonic attention
+mechanism. Furthermore, SimpleKT (Liu et al. 2023) uses
+an ordinary dot-product attention to extract time-aware in-
+formation embedded in student learning interactions.
+However, existing research often overlooks the issue of
+uncertainty in knowledge tracing, which is a key challenge
+that needs to be addressed in the field.
+Preliminaries
+Uncertainty Definition
+Uncertainty, as an inherent unpredictable component in
+model predictions or outcomes, plays a crucial role in sup-
+porting societal decision-making, quantitative research, and
+machine learning applications (Helton et al. 2008; Wimmer
+et al. 2023; Gal et al. 2016). The prerequisite for delving into
+these uncertainties consist of establishing the foundation for
+building user trust in the system and enhancing the model re-
+liability (Sanchez et al. 2022). To further refine this concept,
+uncertainty can be divided into two main categories: epis-
+temic uncertainty and aleatory uncertainty (Gal et al. 2016;
+H¨ullermeier and Waegeman 2021).
+Epistemic Uncertainty
+It arises from a lack of knowledge
+about the system or process and can be reduced by acquiring
+more information or improving the model, involving an in-
+complete understanding of certain parameters or system be-
+haviors (Chen and Qiao 2020). In knowledge tracing, epis-
+temic uncertainty originates from the diversity in students’
+learning abilities and knowledge absorption levels and arises
+from varying depths of students’ understanding of concepts
+so that is hard to capture. This uncertainty relates to each stu-
+dent’s unique learning path, comprehension skills, and learn-
+ing strategies. Even when faced with the same learning ma-
+terials and environment, different students may exhibit sig-
+nificant differences in knowledge mastery and application,
+leading to variations in learning outcomes and complexity
+in assessing students’ knowledge levels.
+Uncertainty 
+Aware
+Deterministic
+Figure 3: The differences between deterministic KT and
+UKT architectures.
+Aleatory Uncertainty
+This type of uncertainty is inherent
+in the data itself, stemming from the randomness in the data
+generation process. It cannot be reduced by collecting more
+data (H¨ullermeier and Waegeman 2021). Examples include
+measurement noise, inherent variability in the data, and ran-
+domness in the environment. In the field of knowledge trac-
+ing, this uncertainty might manifest as students making care-
+less mistakes or guessing on questions.
+By understanding and quantifying these two types of un-
+certainty, we can build models that are both accurate and
+trustworthy (Abdar et al. 2021). We have carefully de-
+signed our KT model to effectively tackle both epistemic
+and aleatory uncertainty.
+Problem Statement
+For each student S, we assume that we have a series of
+T interactions arranged in chronological order, i.e., S =
+{sj}T
+j=1. Each interaction can be represented as a structured
+quadruple s = ⟨q, {c}, r, s⟩, where q is the specific question,
+{c} is the set of knowledge components associated with the
+question, r is the binary student response (correct or incor-
+rect), and s is the time point at which the student answered.
+Our goal is to construct a model based on this information
+to evaluate and predict the probability ˆr∗that a student will
+answer correctly to a given question q∗.
+Methodology
+In this section, we describe how the UKT model pro-
+cesses student interaction data and handles uncertainty. The
+UKT model uses a stochastic embedding layer with mean
+and covariance parameters to represent student interactions
+as a Gaussian distribution. The mean indicates the stu-
+dent’s baseline knowledge, while the covariance captures
+the uncertainty in the learning process, including both epis-
+temic and aleatory uncertainties. A Wasserstein-based self-
+attention layer analyzes this Gaussian distribution to track
+changes in knowledge states. The student’s knowledge state
+and associated uncertainty are then processed through a
+Feed-Forward Network (FFN) layer to assess their mas-
+tery and uncertainty regarding specific questions. To address
+
+
+===== PAGE 4 =====
+aleatory uncertainty, we incorporate an aleatory uncertainty-
+aware contrastive learning layer for model learning to en-
+hance prediction robustness. Finally, we integrate the ad-
+justed uncertainty with the student’s knowledge level to pre-
+dict their performance on specific problems. The main dif-
+ference between UKT and deterministic KT in model archi-
+tectures is shown as figure 3.
+Stochastic Embedding Layers
+Understanding student interactions is crucial for tracking
+their learning progress. In education, practice questions of-
+ten exceed knowledge components (KCs) significantly. For
+example, in the Algebra2005 dataset, questions outnumber
+KCs by over 1,500 times (see Section 4.1). To handle the in-
+herent uncertainty, we build on the methods from (Ghosh,
+Heffernan, and Lan 2020) and (Liu et al. 2022). We de-
+velop our UKT from (Ghosh, Heffernan, and Lan 2020) and
+(Liu et al. 2022). Specifically, we first map students’ re-
+sponses to questions onto KCs, evaluating each KC individ-
+ually to assess understanding. We then use mean embedding
+Eµ ∈R|V |×d to represent base interaction and covariance
+embedding Eσ ∈R|V |×d for uncertainties, creating a mul-
+tidimensional elliptical Gaussian distribution to student be-
+havior. We apply the same method to the knowledge compo-
+nents (KCs) as well to obtain M µ ∈R|V |×d,M σ ∈R|V |×d.
+The representation process is formulated as follows:
+zck = Wq · eck,
+rσ
+qj = W1
+c · eσ
+qj,
+rµ
+qj = W2
+c · eµ
+qj
+Eσ
+t = zck ⊕rσ
+qj ⊙vck,
+Eµ
+t = zck ⊕mµ
+qj ⊙vck
+M σ
+t = zck ⊕mσ
+qj ⊙vck,
+M µ
+t = zck ⊕mµ
+qj ⊙vck
+(1)
+where zck denotes the latent representation of KC ck, mqj
+represents the difficulty vector of the question qj contain-
+ing ck, and vck indicates the question-centric variation of qj
+including ck. rqj denotes the student’s response represen-
+tation to qj. eck and eqj are one-hot vectors indicating the
+corresponding KC and correctness of the response, respec-
+tively. zck, mqj, vck, and rqj are d-dimensional learnable
+vectors, and Wc ∈Rd×n and Wq ∈Rd×2 are learnable lin-
+ear transformations. The operators ⊙and ⊕denote element-
+wise product and addition, with n represents the total num-
+ber of KCs.
+Wasserstein-Based Self-Attention
+To address the limitation of dot-product that can not measure
+the discrepancy between distributions (Kim, Papamakarios,
+and Mnih 2021), we introduce the Wasserstein distance
+(Clement and Desch 2008; Fan et al. 2022, 2023) to track the
+progression of a student’s learning states across stochastic
+embeddings, in which we employ separate position embed-
+dings for the mean and covariance, denoted as P µ ∈Rn×d
+and P σ ∈Rn×d, respectively:
+ˆMµ
+t =
+Mµ
+t1 + Pµ
+t1,
+Mµ
+t2 + Pµ
+t2,
+. . . ,
+Mµ
+tn + Pµ
+tn
+
+ˆMσ
+t =
+Mσ
+t1 + Pσ
+t1,
+Mσ
+t2 + Pσ
+t2,
+. . . ,
+Mσ
+tn + Pσ
+tn
+
+ˆEµ
+t =
+Eµ
+t1 + Pµ
+t1,
+Eµ
+t2 + Pµ
+t2,
+. . . ,
+Eµ
+tn + Pµ
+tn
+
+ˆEσ
+t =
+Eσ
+t1 + Pσ
+t1,
+Eσ
+t2 + Pσ
+t2,
+. . . ,
+Eσ
+tn + Pσ
+tn
+
+(2)
+We derive the mean and covariance sequence embeddings
+for student interactions. To align with the interaction distri-
+bution, we also derive the mean and covariance embeddings
+of KC sequences.The Exponential Linear Unit (ELU) maps
+inputs into the interval [−1, +∞), ensuring the positive def-
+inite property of covariance.
+M µ
+t = ˆ
+M µ,
+M σ
+t = ELU
+
+diag( ˆ
+M σ)
+
++ 1
+Eµ
+t = ˆEµ,
+Eσ
+t = ELU
+
+diag( ˆEσ)
+
++ 1
+(3)
+We apply the attention weight as the negative 2-Wasserstein
+distance W2(·, ·) to knowledge state retrieval, which is com-
+puted as follows:
+scoret+1 = −(W2(Mt, Rt)) = −
+ ∥M µ −Eµ∥2
+2
++ trace
+ M σ+ Eσ −2
+ (M σ)
+1
+2 M σ(Eσ)
+1
+2  1
+2 
+(4)
+and the retrieved knowledge state ht+1 at timestamp t+1 is
+computed as follows:
+hµ
+t+1, hσ
+t+1 = WassersteinSelfAttention(
+Qµ = Mµ
+t+1,
+Qσ = Mσ
+t+1,
+Kµ = {Mµ
+1, · · · , Mµ
+t}, Kσ = {Mσ
+1, · · · , Mσ
+t},
+V µ = {Eµ
+1, · · · , Eµ
+t},
+V σ = {Eσ
+1, · · · , Eσ
+t}).
+(5)
+Feed-Forward Network
+Then we use a two-layer fully connected network to refine
+the knowledge state:
+hµ
+t+1 =W2 · ReLU(W1 · [hµ
+t+1; Mµ
+t+1] + b1) + b2
+hσ
+t+1 =ELU
+ W4· ReLU(W3·[hσ
+t+1; Mσ
+t+1]+b3)+b4
+
++1
+(6)
+where W1, W3
+∈
+Ed×2d, W2, W4
+∈
+Ed×d, and
+b1, b2, b3, b4 ∈Ed×1 are trainable parameters.
+The framework design of UKT is highly efficient. Com-
+pared to standard attention-based KT methods (Liu et al.
+2023), UKT only adds a covariance matrix embedding,
+while Wasserstein attention has a computational cost simi-
+lar to that of the standard self-attention. In our experiments,
+training and inference can be efficiently completed on a sin-
+gle GPU within an hour.
+Aleatory Uncertainty-Aware Contrastive Learning
+To retain epistemic uncertainty and enhance the model’s
+resilience to aleatory uncertainty, we propose aleatory
+uncertainty-aware contrastive learning, which constructs
+negative samples that represent both careless behavior and
+lucky guesses for contrastive learning. We denote the nega-
+tive interaction sequence of student si as qs−
+i . Constructing
+such semantically negative samples is crucial for contrastive
+learning (Gao, Yao, and Chen 2021; Li et al. 2024). Specif-
+ically, we modify a student’s interaction sequence based on
+the outcome of the last answered question. If the last item
+is correct, we invert all previous correct responses and re-
+serve the last correct one to construct the negative sequence,
+preventing model from being influenced by lucky guesses.
+
+
+===== PAGE 5 =====
+Conversely, if the last interaction is incorrect, we invert pre-
+vious incorrect responses with the last one unchanged as
+another kind of negative sample to prevent the model from
+overemphasizing careless mistakes. We adopt the categori-
+cal cross-entropy loss (Oord, Li, and Vinyals 2018) to max-
+imize mutual information (qsi, qs−
+i ) between two perturbed
+views (Ozair et al. 2019), calculated as:
+IW2(qsi, qs−
+i ) ≥−LCL(hsi, hs−
+i )
+= log
+exp
+
+W2(hsi, hs−
+i )
+
+exp
+
+W2(hsi, hs−
+i )
+
++ P
+j∈S−
+B
+exp
+ −W2(hsi, hj)
+
+(7)
+where hsi ∼N
+ hsi
+µ , hsi
+Σ
+
+is the encoded stochastic out-
+put knowledge state with mean hsi
+µ and covariance hsi
+Σ .
+IW2(qsi, qs−
+i ) denotes the mutual information of (qsi ,qs−
+i ).
+The 2-Wasserstein distance between the encoded distribu-
+tions is computed as the sum of the squared L2 distances
+between the mean embeddings and the squared root of the
+covariance matrices.
+Prediction Layer and Model Optimization
+The overall optimization function Loverall is defined as:
+ηt+1 = w⊤· ReLU
+ hµ
+t+1; hσ
+t+1
+
++b
+(8)
+Lp = −
+X
+t
+ rt log σ(ηt) + (1 −rt) log(1 −σ(ηt))
+
+(9)
+Loverall = Lp + λ ∗LCL
+(10)
+where w and b are trainable parameters and w ∈Ed×1, b is
+the scalar, σ(·) is the Sigmoid function and λ is the weight
+of contrastive learning loss.
+Experiments
+In this section, we perform extensive experiments to answer
+the following Research Questions (RQs):
+• RQ1: How does UKT perform compared with baselines?
+• RQ2: How does UKT perform with different weights for
+aleatory uncertainty-aware contrastive learning?
+• RQ3: Can UKT capture epistemic uncertainties and re-
+duce the effect of aleatory uncertainties for KT?
+• RQ4: Are the key components effective in UKT?
+Dataset
+In our experiments, we conduct experiments on six bench-
+mark datasets to evaluate the performance of each model:
+• ASSISTments2009 (AS2009)1: This dataset focuses on
+math exercises, collected from the free online tutor-
+ing platform ASSISTments during the 2009-2010 school
+year. It has been widely used as a standard benchmark
+for KT methods over the past decade. The dataset in-
+cludes 3,374,115 interactions, 4,661 sequences, 17,737
+questions, and 123 knowledge components (KCs), with
+each question having an average of 1.1968 KCs.
+1https://sites.google.com/site/assistmentsdata/home/2009-
+2010-assistment-data/skill-builder-data-2009-2010.
+• Algebra2005 (AL2005) 2: This dataset originates from
+the KDD Cup 2010 EDM Challenge and includes de-
+tailed step-level student responses to mathematical prob-
+lems, where a question is constructed by concatenating
+the problem name and step name. This dataset consists
+of 884,098 interactions, 4,712 sequences, 173,113 ques-
+tions, and 112 KCs, with an average of 1.3521 KCs per
+question.
+• Bridge2006 (BD2006): It is derived from the KDD Cup
+2010 EDM Challenge as well, this dataset follows a sim-
+ilar unique question construction process as used in Al-
+gebra2005. The dataset contains 1,824,310 interactions,
+9,680 sequences, 129,263 questions, and 493 KCs, with
+an average of 1.0136 KCs per question.
+• NIPS343: Provided by the NeurIPS 2020 Education
+Challenge, this dataset contains students’ answers to
+mathematics questions from Eedi. The dataset used from
+Task 3 and Task 4 includes 1,399,470 interactions, 9,401
+sequences, 948 questions, and 57 KCs, with each ques-
+tion having an average of 1.0137 KCs.
+• ASSISTments2015 (AS2015)4: Similar to ASSIST-
+ments2009, this dataset is collected from the ASSIST-
+ments platform in 2015 and includes the largest num-
+ber of students among the other ASSISTments datasets.
+After pre-processing, it includes 682,789 interactions,
+19,292 sequences, and 100 KCs.
+• POJ5: Collected from the Peking University coding prac-
+tice online platform, this dataset includes 987,593 inter-
+actions, 20,114 sequences, and 2,748 questions.
+Following the data pre-processing steps suggested by (Liu
+et al. 2022), we remove student sequences with fewer than
+three attempts and set the maximum length of student inter-
+action history to 200 to ensure computational efficiency.
+Baselines
+We evaluate the performance of the proposed UKT by com-
+paring it with the following baselines:
+• DKT (Piech et al. 2015): DKT directly uses RNNs to
+model students’ learning processes.
+• SAKT (Pandey and Karypis 2019): It employs self-
+attention to identify the relevance between the interac-
+tions and KCs.
+• SAINT (Choi et al. 2020): It is a Transformer-based
+model for KT that encodes exercise and responses in the
+encoder and decoder respectively.
+• ATKT (Guo et al. 2021): This approach utilizes adver-
+sarial perturbations to improve the generalization ability
+of the attention-LSTM-based knowledge tracing model.
+2https://pslcdatashop.web.cmu.edu/KDDCup/.
+3https://eedi.com/projects/neurips-education-challenge.
+4https://sites.google.com/site/assistmentsdata/datasets/2015-
+assistments-skill-builder-data.
+5https://drive.google.com/drive/folders/
+1LRljqWfODwTYRMPw6wEJ mMt1KZ4xBDk.
+
+
+===== PAGE 6 =====
+Model
+AS2009
+AL2005
+BD2006
+NIPS34
+AS2015
+POJ
+DKT
+0.8226±0.0011
+0.8149±0.0011
+0.8015±0.0008
+0.7689±0.0002
+0.7271±0.0005
+0.6089±0.0009
+SAKT
+0.7746±0.0017
+0.8780±0.0063
+0.7740±0.0008
+0.7517±0.0005
+0.7114±0.0003
+0.6095±0.0013
+SAINT
+0.7458±0.0023
+0.8775±0.0017
+0.7781±0.0013
+0.7873±0.0007
+0.7026±0.0011
+0.5563±0.0012
+ATKT
+0.7470±0.0008
+0.7995±0.0023
+0.7889±0.0008
+0.7665±0.0001
+0.7245±0.0007
+0.6075±0.0012
+AKT
+0.8474±0.0017
+0.9294±0.0019
+0.8167±0.0007
+0.7960±0.0003
+0.7282±0.0004
+0.6218±0.0013
+simpleKT
+0.8413±0.0018
+0.9267±0.0003
+0.8141±0.0006
+0.7966±0.0000
+0.7237±0.0005
+0.6194±0.0005
+UKT
+0.8563±0.0014
+0.9320±0.0012
+0.8178±0.0009
+0.8035±0.0004
+0.7267±0.0007
+0.6301±0.0005
+Table 1: Overall AUC performance of UKT and all baselines.
+Models
+AS2009
+AL2005
+BD2006
+NIPS34
+AS2015
+POJ
+DKT
+0.7657±0.0011
+0.8149±0.0011
+0.8015±0.0008
+0.7689±0.0002
+0.7271±0.0005
+0.6089±0.0009
+SAKT
+0.7063±0.0018
+0.7954±0.0020
+0.8461±0.0005
+0.6879±0.0004
+0.7474±0.0002
+0.6407±0.0035
+SAINT
+0.6936±0.0034
+0.7791±0.0016
+0.8411±0.0065
+0.7180±0.0006
+0.7438±0.0010
+0.6476±0.0003
+ATKT
+0.7208±0.0009
+0.7998±0.0019
+0.8511±0.0004
+0.6332±0.0023
+0.7494±0.0002
+0.6075±0.0012
+AKT
+0.7772±0.0021
+0.8747±0.0011
+0.8516±0.0005
+0.7323±0.0005
+0.7521±0.0005
+0.6449±0.0010
+simpleKT
+0.7748±0.0012
+0.8510±0.0005
+0.8510±0.0003
+0.7328±0.0001
+0.7506±0.0004
+0.6498±0.0008
+UKT
+0.7814±0.0017
+0.8781±0.0005
+0.8531±0.0006
+0.7316±0.0004
+0.7497±0.0002
+0.6548±0.0008
+Table 2: Overall Accuracy performance of UKT and all baselines.
+• AKT (Ghosh, Heffernan, and Lan 2020): This approach
+models forgetting behaviors during relevance computa-
+tion between historical interactions and target questions.
+• SimpleKT (Liu et al. 2023): It utilizes a simple and ef-
+fective attention mechanism to capture the contextual in-
+formation embedded in students’ learning interactions.
+Implementation Details and Evaluation Metrics
+Following previous research (Liu et al. 2022), we reserve
+20% of the students’ sequences for evaluation, while the re-
+maining 80% undergo standard 5-fold cross-validation.
+For model training, we use the Adam optimizer (Kingma
+and Ba 2014), capping the training at a maximum of 200
+epochs with early stopping to speed up the process. The em-
+bedding dimension, hidden state dimension, and the two di-
+mensions of the prediction layers are set within [64, 128,
+256, 512]. Learning rates are selected from [1e-3, 1e-4, 1e-
+5], dropout rates from [0.05, 0.1, 0.3, 0.5], and contrastive
+learning rates from [0.01, 0.02, 0.05, 0.07, 0.1, 0.5, 1]. The
+number of blocks and attention heads are set within [1, 2,
+4] and [4, 8], respectively. Our model is implemented with
+PyTorch and trained on a single A100 GPU.
+In line with previous research, we evaluate model perfor-
+mance with AUC and accuracy as metric.
+Overall Performances (RQ1)
+The model performance in terms of the average AUC and ac-
+curacy scores is reported in Table 1 and Table 2 respectively.
+We can draw the following conclusions:
+• UKT consistently outperforms the other baselines in
+AUC scores across all datasets, highlighting its superi-
+ority as an uncertainty-aware KT model.
+• UKT only slightly underperforms baselines on the AS-
+SIST2015 dataset. This can be attributed to the fact that
+the ASSIST2015 dataset is the largest and primarily con-
+sists of data from different students, allowing AKT’s
+two-layer attention structure to simultaneously ignore in-
+dividual differences in epistemic uncertainty and aleatory
+uncertainty, leveraging the large dataset for predictions.
+• UKT demonstrates significant advantages over other
+baselines across all datasets. This is particularly evident
+in terms of AUC and Accuracy, where the improvements
+are substantial. This further validates that by focusing
+on the uncertainty in students’ learning states, UKT can
+more effectively capture and predict learning behaviors,
+thereby excelling across various datasets.
+Contrastive Learning Weight Analysis (RQ2)
+To explore the impact of the degree of emphasis on aleatory
+uncertainty on the overall model performance, we adjusted
+the weight of contrastive learning to observe the model’s fi-
+nal prediction performance. Figure 4 shows the performance
+on ASSIST2009 and Algebra2005 with varying λ values,
+from which we draw the following conclusions:
+• Aleatory uncertainty is a random factor in students’
+learning assessment. By mitigating the effect of this un-
+certainty, we can indeed enhance the performance.
+• When too much emphasis is placed on aleatory uncer-
+tainty, the model’s performance actually declines. The
+reason is that aleatory uncertainty is more sparse and
+Figure 4: AUC of UKT with varying λ values.
+
+
+===== PAGE 7 =====
+0
+1
+2
+3
+4
+5
+6
+7
+0
+1
+2
+3
+4
+5
+6
+7
+1.149
+1.150
+1.151
+1.152
+1.153
+1.154
+Figure 5: The heatmap of the mean of the covariance matrix
+of sequences in a batch from the Algebra2005 dataset.
+0
+1
+2
+3
+4
+5
+6
+7
+0
+1
+2
+3
+4
+5
+6
+7
+1.149
+1.150
+1.151
+1.152
+1.153
+1.154
+Figure 6: The heatmap of the mean of the covariance matrix
+of sequences in a batch from the Assist2009 dataset.
+random compared to epistemic uncertainty. Excessive
+weight λ would bring too much attention to aleatory un-
+certainty during training, diverting the model from the
+primary goal of predicting student knowledge levels.
+Uncertainty Analysis (RQ3)
+In this section, we verify that UKT is capable of capturing
+epistemic uncertainty while handling aleatory uncertainty
+through visualization.
+We speculate that the epistemic uncertainty exhibited by
+the same student in a problem-solving scenario has a cer-
+tain degree of continuity. Given that covariance embed-
+ding can quantify this uncertainty, we employ the follow-
+ing approach: we extract covariance embeddings processed
+through a Feed-Forward Network from a series of data and
+calculated the average covariance matrix for each sample to
+reflect the level of epistemic uncertainty across the entire
+sequence. We expect that the interaction sequences from the
+same student would show consistent average covariance val-
+ues, which will be reflected as similar color blocks in the
+heatmap black (See Figures 5 and 6).
+Figure 5 is derived from the Algebra 2005 dataset, which
+records students’ problem-solving process on math prob-
+lems. The heatmap shows that the color gradient between
+Models
+w/o AU
+with AU
+Performance
+simpleKT
+0.8413
+0.8317
+-1.14%
+AKT
+0.8474
+0.8361
+-1.33%
+UKT
+0.8501
+0.8430
+-0.83%
+Table 3: Performance comparison of models with and with-
+out AU (Aleatory Uncertainty) on AS2009 dataset.
+Model
+AS2009
+Algebra2005
+UKT
+0.8563±0.0018
+0.9320±0.0012
+UKT w/o CL
+0.8507±0.0020
+0.9258±0.0018
+UKT w/o W.dist
+0.8450±0.0024
+0.9208±0.0019
+UKT w/o Stocemb
+0.8445±0.0028
+0.9217±0.0022
+Table 4: The ablation study of contrastive learning.
+adjacent data points is relatively smooth, indicating that the
+changes in covariance are minimal. Such observation con-
+firms the relative stability of students’ cognitive activity.
+In contrast, Figure 6 is from the assist2009 dataset, where
+the sequences primarily come from students with diverse
+backgrounds. The results show that the color blocks on the
+heatmap display more significant independence and disper-
+sion, indicating clear differences in epistemic uncertainty
+among different students. This comparative analysis high-
+lights the individuality and diversity of cognitive strategies
+each student possesses when solving problems, supporting
+our theoretical hypothesis.
+Furthermore, to demonstrate that UKT is more capable of
+handling uncertain environments compared to similar mod-
+els, we investigate whether the aleatory uncertainty would
+bring difference to the performance of UKT and the other
+two baselines SimpleKT and AKT. As shown in Table 3,
+UKT is less affected by uncertain data, demonstrating its su-
+perior ability to handle uncertain environments.
+Ablation Study (RQ4)
+As shown by the ablation study reported in Table 4, remov-
+ing each component in UKT leads to inferior performance,
+indicating the effectiveness of each component in uncer-
+tainty modeling. Notably, even without CL, UKT still out-
+performs other models, demonstrating the advantages of un-
+certainty modeling for KT.
+Conclusion
+We propose a novel approach to model students’ knowl-
+edge levels and uncertainties using stochastic interaction
+learning, where students are represented as Gaussian dis-
+tributions with mean and covariance embeddings. By con-
+structing negative samples that account for both careless
+and lucky guesses in contrastive learning, we enhance the
+model’s robustness to aleatory uncertainty. Extensive exper-
+iments on six datasets show that our method outperforms
+existing baselines and effectively models epistemic uncer-
+tainty while demonstrating strong resilience to aleatory un-
+certainty. In the future, we plan to expand our research in
+the multimodal field (Ni et al. 2023; Fu et al. 2024) to han-
+dle more types of uncertainties.
+
+
+===== PAGE 8 =====
+References
+Abdar, M.; Pourpanah, F.; Hussain, S.; Rezazadegan, D.;
+Liu, L.; Ghavamzadeh, M.; Fieguth, P.; Cao, X.; Khosravi,
+A.; Acharya, U. R.; et al. 2021. A review of uncertainty
+quantification in deep learning: Techniques, applications and
+challenges. Information fusion, 76: 243–297.
+Chen, Y.-C.; and Qiao, X. 2020. Using students’ epistemic
+uncertainty as a pedagogical resource to develop knowledge
+in argumentation. International Journal of Science Educa-
+tion, 42(11): 1813349.
+Choi, Y.; Lee, Y.; Cho, J.; Baek, J.; Kim, B.; Cha, Y.; Shin,
+D.; Bae, C.; and Heo, J. 2020.
+Towards an appropriate
+query, key, and value computation for knowledge tracing. In
+Proceedings of the seventh ACM conference on learning@
+scale, 341–344.
+Clement, P.; and Desch, W. 2008. An elementary proof of
+the triangle inequality for the Wasserstein metric. Proceed-
+ings of the American Mathematical Society, 136(1): 333–
+339.
+Fan, Z.; Liu, Z.; Peng, H.; and Yu, P. S. 2023.
+Mutual
+wasserstein discrepancy minimization for sequential recom-
+mendation.
+In Proceedings of the ACM Web Conference
+2023, 1375–1385.
+Fan, Z.; Liu, Z.; Wang, Y.; Wang, A.; Nazari, Z.; Zheng, L.;
+Peng, H.; and Yu, P. S. 2022. Sequential recommendation
+via stochastic self-attention. In Proceedings of the ACM web
+conference 2022, 2036–2047.
+Fu, J.; Ge, X.; Xin, X.; Karatzoglou, A.; Arapakis, I.; Wang,
+J.; and Jose, J. M. 2024. IISAN: Efficiently adapting mul-
+timodal representation for sequential recommendation with
+decoupled PEFT. In Proceedings of the 47th International
+ACM SIGIR Conference on Research and Development in
+Information Retrieval, 687–697.
+Gal, Y.; et al. 2016.
+Uncertainty in deep learning.
+PhD
+thesis, University of Cambridge.
+Gao, T.; Yao, X.; and Chen, D. 2021. Simcse: Simple con-
+trastive learning of sentence embeddings.
+arXiv preprint
+arXiv:2104.08821.
+Ghosh, A.; Heffernan, N.; and Lan, A. S. 2020. Context-
+aware attentive knowledge tracing. In Proceedings of the
+26th ACM SIGKDD international conference on knowledge
+discovery & data mining, 2330–2339.
+Guo, X.; Huang, Z.; Gao, J.; Shang, M.; Shu, M.; and Sun, J.
+2021. Enhancing knowledge tracing via adversarial training.
+In Proceedings of the 29th ACM International Conference
+on Multimedia, 367–375.
+Helton, J. C.; Johnson, J. D.; Oberkampf, W. L.; and Sal-
+laberry, C. J. 2008. Representation of Analysis Results In-
+volving Aleatory and Epistemic Uncertainty. Technical Re-
+port SAND2008-4379, Sandia National Laboratories, Albu-
+querque, New Mexico and Livermore, California, USA.
+H¨ullermeier, E.; and Waegeman, W. 2021.
+Aleatoric and
+epistemic uncertainty in machine learning: An introduction
+to concepts and methods. Machine learning, 110(3): 457–
+506.
+Kim, H.; Papamakarios, G.; and Mnih, A. 2021. The lips-
+chitz constant of self-attention. In International Conference
+on Machine Learning, 5562–5571. PMLR.
+Kingma, D. P.; and Ba, J. 2014.
+Adam: A method for
+stochastic optimization. arXiv preprint arXiv:1412.6980.
+Lee, J.; and Yeung, D.-Y. 2019. Knowledge query network
+for knowledge tracing: How knowledge interacts with skills.
+In Proceedings of the 9th international conference on learn-
+ing analytics & knowledge, 491–500.
+Li, Y.; Du, H.; Ni, Y.; Zhao, P.; Guo, Q.; Yuan, F.; and Zhou,
+X. 2024. Multi-modality is all you need for transferable rec-
+ommender systems. In 2024 IEEE 40th International Con-
+ference on Data Engineering (ICDE), 5008–5021. IEEE.
+Liu, Q.; Huang, Z.; Yin, Y.; Chen, E.; Xiong, H.; Su, Y.;
+and Hu, G. 2019. Ekt: Exercise-aware knowledge tracing
+for student performance prediction. IEEE Transactions on
+Knowledge and Data Engineering, 33(1): 100–115.
+Liu, Y.; Yang, Y.; Chen, X.; Shen, J.; Zhang, H.; and Yu, Y.
+2020. Improving knowledge tracing via pre-training ques-
+tion embeddings. arXiv preprint arXiv:2012.05031.
+Liu, Z.; Liu, Q.; Chen, J.; Huang, S.; and Luo, W. 2023. sim-
+pleKT: a simple but tough-to-beat baseline for knowledge
+tracing. arXiv preprint arXiv:2302.06881.
+Liu, Z.; Liu, Q.; Chen, J.; Huang, S.; Tang, J.; and Luo, W.
+2022. pyKT: a python library to benchmark deep learning
+based knowledge tracing models. Advances in Neural Infor-
+mation Processing Systems, 35: 18542–18555.
+Nagatani, K.; Zhang, Q.; Sato, M.; Chen, Y.-Y.; Chen, F.;
+and Ohkuma, T. 2019. Augmenting knowledge tracing by
+considering forgetting behavior. In The world wide web con-
+ference, 3101–3107.
+Ni, Y.; Cheng, Y.; Liu, X.; Fu, J.; Li, Y.; He, X.;
+Zhang, Y.; and Yuan, F. 2023.
+A content-driven micro-
+video recommendation dataset at scale.
+arXiv preprint
+arXiv:2309.15379.
+Oord, A. v. d.; Li, Y.; and Vinyals, O. 2018. Representation
+learning with contrastive predictive coding. arXiv preprint
+arXiv:1807.03748.
+Ozair, S.; Lynch, C.; Bengio, Y.; Van den Oord, A.; Levine,
+S.; and Sermanet, P. 2019. Wasserstein dependency measure
+for representation learning. Advances in Neural Information
+Processing Systems, 32.
+Pandey, S.; and Karypis, G. 2019. A Self-Attentive Model
+for Knowledge Tracing.
+International Educational Data
+Mining Society.
+Pandey, S.; and Srivastava, J. 2020.
+RKT: relation-aware
+self-attention for knowledge tracing.
+In Proceedings of
+the 29th ACM international conference on information &
+knowledge management, 1205–1214.
+Piech, C.; Bassen, J.; Huang, J.; Ganguli, S.; Sahami, M.;
+Guibas, L. J.; and Sohl-Dickstein, J. 2015. Deep knowledge
+tracing. Advances in neural information processing systems,
+28.
+R¨uschendorf, L. 1985.
+The Wasserstein distance and ap-
+proximation theorems.
+Probability Theory and Related
+Fields, 70(1): 117–129.
+
+
+===== PAGE 9 =====
+Sanchez, T.; Caramiaux, B.; Thiel, P.; and Mackay, W. E.
+2022. Deep Learning Uncertainty in Machine Teaching. In
+Proceedings of the 27th Annual ACM Symposium on User
+Interface Software and Technology (IUI), 26 pages. Helsinki
+/ Virtual, Finland: ACM.
+Shen, S.; Huang, Z.; Liu, Q.; Su, Y.; Wang, S.; and Chen,
+E. 2022. Assessing student’s dynamic knowledge state by
+exploring the question difficulty effect. In Proceedings of
+the 45th international ACM SIGIR conference on research
+and development in information retrieval, 427–437.
+Wimmer, L.; Sale, Y.; Hofman, P.; Bischl, B.; and
+H¨ullermeier, E. 2023. Quantifying aleatoric and epistemic
+uncertainty in machine learning: Are conditional entropy
+and mutual information appropriate measures? In Uncer-
+tainty in Artificial Intelligence, 2282–2292. PMLR.
+Yang, Y.; Shen, J.; Qu, Y.; Liu, Y.; Wang, K.; Zhu, Y.; Zhang,
+W.; and Yu, Y. 2021. GIKT: a graph-based interaction model
+for knowledge tracing.
+In Machine learning and knowl-
+edge discovery in databases: European conference, ECML
+PKDD 2020, Ghent, Belgium, September 14–18, 2020, pro-
+ceedings, part I, 299–315. Springer.
+Zhang, J.; Shi, X.; King, I.; and Yeung, D.-Y. 2017. Dynamic
+key-value memory networks for knowledge tracing. In Pro-
+ceedings of the 26th international conference on World Wide
+Web, 765–774.
+Zhang, M.; Zhu, X.; Zhang, C.; Ji, Y.; Pan, F.; and Yin, C.
+2021. Multi-factors aware dual-attentional knowledge trac-
+ing. In Proceedings of the 30th ACM International Con-
+ference on Information & Knowledge Management, 2588–
+2597.
