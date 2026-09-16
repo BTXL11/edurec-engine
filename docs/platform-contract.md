@@ -35,11 +35,17 @@ engine 侧惯例是拷入 `dataset/platform_snapshot/<run_id>/`，目录名保�
 | 文件 | 列 | 必需 | 说明 |
 |---|---|---|---|
 | `users.csv` | `user_id` | ✅ | **只有 ID，不含任何个人信息** |
-| `resources.csv` | `resource_id,title,type,category_id,tags_json,metadata_json,avg_rating,view_count,created_at` | ✅ | |
+| `resources.csv` | `resource_id,title,type,category_id,tags_json,metadata_json,avg_rating,view_count,created_at` | ✅ | 见下方 `description` 说明 |
+| `resources.csv`（可选列） | `description` | ⬜ | **资源正文**。语义召回模型的全部信号来自它；缺失时 engine 降级为空串（不报错），但**语义模型将基本失效**。建议 platform 在 `export_snapshot` 中补上该列 |
 | `behaviors.csv` | `user_id,resource_id,action,ts` | ✅ | 用户行为流水 |
 | `ratings.csv` | `user_id,resource_id,score,ts` | ✅ | 站内评分 |
 | `meta.json` | 见下 | ⬜ | 元信息与校验和。**缺失时不报错**，但版本校验会被跳过 |
 | `categories.csv` | `category_id,name` | ⬜ | 平台会写出；engine 目前不读它（只用 `category_id` 整数，不用分类名） |
+
+> **关于 `description`：** 它不是「新增字段」而是「已有字段的导出」。平台
+> `resources` 表本就有 `description TEXT`（见 `docs/external/edurec-platform-design.md` §5.2），
+> 只是当前 `export_snapshot` 未导出。engine 侧已做向后兼容：读到该列就用，
+> 读不到就用空串——因此补导**不构成破坏性变更**，旧快照仍能跑通。
 
 「必需」= 缺了就必须明确报错退出，不要静默继续。
 
@@ -271,53 +277,47 @@ Authorization: Bearer <管理员 access_token>
 
 ## 附录：engine 现状与本契约的差距
 
-> 以下是 **2026-09-15 的快照**，会随实现演进失效；前面的规范部分不会。清单本身**不是契约**，
-> 修掉这些差距不构成契约变更。
+> 以下是 **2026-09-16 的快照**（`feat/rebuild-model` 分支：语义召回模型重建后），
+> 会随实现演进失效；前面的规范部分不会。清单本身**不是契约**，修掉这些差距不构成契约变更。
 
 ### 已经符合的（换模型时必须保持）
 
 | 条款 | 现状 |
 |---|---|
-| 主文件形状 | ✅ `{str(user_id): [int resource_id, …]}`，`encoding="utf-8"`（无 BOM），见 `scripts/run_batch_infer.py:52` |
-| 用平台原始 ID | ✅ 出口经 vocab 反映射回原始 ID，且有测试钉住（非连续 ID 断言） |
-| 覆盖全量用户 | ✅ `all_users` 取快照全部用户，冷启动走热门兜底（`scripts/run_batch_infer.py:41`） |
-| 按相关性降序 | ✅ 精排分数降序 → MMR 重排，顺序即排名 |
-| 自行去重 | ✅ 成立，但**是结构性的**：候选来自 `argsort` 的下标，天然唯一。见下方风险项 |
+| 主文件形状 | ✅ `{str(user_id): [int resource_id, …]}`，`encoding="utf-8"`（无 BOM） |
+| 用平台原始 ID | ✅ 出口用数据集原始 ID；加载器把字符串 ID 排序编号，原始 ID 留在 `metadata["source_id"]` 与 `id_map` |
+| 覆盖全量用户 | ✅ `infer_batch` 默认遍历 `bundle.users` 全部用户，冷启动走热门兜底并有计数 |
+| 按相关性降序 | ✅ 语义分与质量分融合后降序，顺序即排名 |
+| 自行去重 | ✅ 出口按 `argsort` 下标取候选，天然唯一；另有测试断言无重复 |
+| 硬约束「先写临时文件再原子重命名」 | ✅ `write_handoff` 写 `*.tmp` 后 `os.replace` |
+| 旁挂信封 | ✅ 写出 `recommendations.meta.json`，含 `scores`（与主文件顺序一一对应）、模型标识、质量权重、快照 `run_id`；`--no-envelope` 可关闭 |
+| 推荐里不含已交互内容 | ✅ 出口按 `behaviors` 过滤该用户已交互的课程（契约虽未强制，但 `behaviors.csv` 正是为此提供） |
+| 训练/推理口径一致 | ✅ 推理前校验编码器版本**与资源语料指纹**，不一致时明确报错退出（非零） |
 
 ### 与契约条款不符或未落实的
 
 | 条款 | 差距 | 建议 |
 |---|---|---|
-| 硬约束「先写临时文件再原子重命名」 | ⚠️ 直接 `open(..., "w")` 写入，无临时文件（`scripts/run_batch_infer.py:52`）。platform 若恰在写入中途读取，会拿到截断的 JSON → 500 | 改为写 `recommendations.json.tmp` 后 `os.replace` |
-| 建议「加载前校验 `files_sha256`」 | ❌ 全仓库无任何 `sha256` 读取代码，校验和写了但从不校验 | 加载 `platform.py` 时比对一次，挡住拷贝中断 |
-| 旁挂信封 | ❌ 未实现，`scores` 迄今被丢弃（融合分数在 `src/engine/pipeline/infer_batch.py:87` 算出后未留存） | 可选，但趁换模型一并落地成本最低 |
+| 建议「加载前校验 `files_sha256`」 | ❌ `platform.py` 仍未比对 `meta.json` 里的校验和 | 加载时比对一次，挡住拷贝中断 |
 | `categories.csv` | 未读取 | 无需处理（engine 只用 `category_id` 整数），此处仅为完整性 |
 
 ### 契约未要求、但换模型时会踩到的实现问题
 
-这几条不在契约范围内，但都属「现在能跑、换模型时容易破」的地方，值得一并知道：
+1. **资源正文（`description`）尚未由 platform 导出。** 语义召回的全部信号来自
+   `resources.csv` 的文本，而当前快照只有 `title`（MOOCCube 的 `about` 来自数据集本身）。
+   本地 `platform.py` 已支持该可选列、缺失时降级为空串，但**没有正文时语义模型基本失效**。
+   详见「方向 A · resources.csv」一节。
+2. **`metadata_json` 里的 `created_at` 尚未用于特征。** 快照提供了它（`platform.py`
+   读进 `metadata`），模型侧目前只用热度与评分，未做「新资源加权」。
+3. **多路召回合并时需要显式去重。** 当前是单路召回（语义），候选天然唯一；
+   一旦做多路合并（语义 + 协同 + 图），必须在上面的出口补一次显式去重。
 
-1. **去重是隐式的，不是显式的。** 候选来自单路召回的 `argsort` 下标，天然不含重复项，
-   所以出口没有去重代码。一旦换成**多路召回合并**（图 + 协同 + 语义）——这正是换模型最常见的形态——
-   候选会被拼接，重复 ID 就会原样输出到缓存里。届时必须在出口补一次显式去重。
-2. **`rerank` 的「已看过的不再推」从未生效。** `infer_batch.py:94` 恒传 `seen=set()`，
-   于是 `rerank.py:23` 的过滤条件恒真、一个都不过滤。platform 导出的 `behaviors.csv`
-   正是为了让引擎能做这件事——目前这份信息在推理期没被用上。
-3. **冷启动加权是均匀缩放，等于没做。** `rerank.py:26` 的判断是 `config.cold_age_days > 0`
-   （一个全局配置），而不是「这个候选有多新」，于是所有候选项同乘一个常数。
-   MMR 只比较候选项之间的相对分数，同乘常数不改变任何相对序 → 行为上完全无效。
-   要做成真的，得按**每个 item 的年龄**分别加权。
-4. **`age_days` 用了硬编码基准，真实快照下几乎恒定。**
-   `src/engine/features/item_features.py:22` 以固定常数 `1_700_000_000` 为基准算资源年龄，
-   而真实快照的 `created_at` 与该基准的差值对所有资源都很大且彼此接近，
-   「新资源」这个信号实际被抹平了。快照**是提供了** `created_at` 的
-   （`src/engine/data/platform.py:43` 读进 `metadata`，但此后无人使用）——改成用它即可。
+### 已解决的历史问题（保留记录，便于对照）
 
-### 附带发现（与本契约无关）
-
-`scripts/run_batch_infer.py:40` 的 `else` 分支对 `sim` 与 `movielens` 两类数据源都读 `dataset/sim/`，
-即 `--data-source movielens` 实际仍加载 sim 数据。它只影响自造数据的演示轨道，
-不影响 `--data-source platform`；但会让人误以为能用它验证 movielens 路径。
+- ✅ 去重曾是隐式的、`rerank` 的「已看不推」曾从未生效、冷启动加权曾是均匀缩放：
+  旧流水线（MMR 重排那一版）的问题，随模型重建一并消失——重建后的出口显式过滤已交互课程。
+- ✅ `scripts/run_batch_infer.py` 的 `movielens` 分支曾误读 `dataset/sim/`：
+  重建后的入口只支持 `mooccube` / `sim` / `platform`，`movielens` 不再列出以免误导。
 
 ---
 
