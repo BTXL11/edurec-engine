@@ -90,3 +90,26 @@ python -m scripts.run_batch_infer --data-source mooccube
 - 文本编码器可插拔：本地降级实现（无网络依赖）↔ 真 transformer
   （`encoder_kind="sentence_transformer"`，需先装 `sentence-transformers` 并缓存模型）。
 - 论文原文抽取文本在 `docs/papers/`（**若仓库公开建议移除**，只留引用信息）。
+
+## 知识生成服务（供 platform 实时调用）
+
+scripts/kg_server.py 把 model/generate.py 的能力封装成 HTTP 服务：
+平台在搜索或知识点详情里实时请求「标题/描述 → 概念」，拿到结果后落库展示。
+生成算法、Wikifier 调用与模型依赖都留在 engine，平台不执行 Python。
+
+`ash
+# 仓库根目录；依赖与 model/ 需先准备好（model/ 不入库）
+python scripts/kg_server.py --host 127.0.0.1 --port 8090
+`
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/health` | 服务状态 |
+| POST | `/knowledge/generate` | `{title, description, point_code}` → `{concepts:[{name, page_rank}]}` |
+| POST | `/knowledge/generate_batch` | 批量生成 |
+
+- 概念过滤：pageRank 阈值 + 停用词 + 最短长度，默认最多 30 个；
+- 平台侧配置 `knowledge.generator_url`（默认 `http://127.0.0.1:8090`），
+  engine 未启动时只影响「自动生成概念」，不影响平台其他功能；
+- 与 docs/platform-contract.md 的文件交接并行：该服务是**可选**的在线能力，
+  不改变「快照进、排名出」的主契约。
