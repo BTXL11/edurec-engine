@@ -69,6 +69,9 @@ class EngineConfig:
     encoder_model: str = "all-MiniLM-L6-v2"   # encoder_kind=sentence_transformer 时使用
 
     # 阶段一：双塔语义召回
+    # deterministic（点表示）| gaussian（分布表示）。
+    # 默认 deterministic：高斯扩展在 MOOCCube 上无收益（见 models/recall/gaussian.py 顶部实测结论）。
+    tower_kind: str = "deterministic"
     recall_embed_dim: int = 128           # 双塔输出的召回向量维度
     recall_hidden_dim: int = 256          # 塔内隐层宽度
     recall_dropout: float = 0.0
@@ -84,6 +87,13 @@ class EngineConfig:
     recall_sample_mode: str = "last_prefix"
     eval_ks: tuple[int, ...] = (5, 10, 20)
     eval_n_negatives: int = 99            # 采样候选时的负样本数（0 = 全量候选）
+
+    # 阶段二：高斯双塔（概率式表示）
+    gaussian_variance_floor: float = 0.05  # 方差正则权重，防止方差塌缩退化成阶段一
+    gaussian_max_std: float = 10.0         # 标准差上界，防方差爆炸
+    gaussian_history_signal: bool = True   # 把历史长度作为需求塔输入（方差学得出来的前提）
+    sparse_history_max: int = 2            # 「历史稀疏」评估：训练期只保留最近 N 条交互
+                                           # （用于检验概率建模在冷启动/模糊需求上的价值）
     # 质量信号融合权重。CourseHub 在自建 MOOC 数据上网格搜索得到 (0.7, 0.2, 0.1)；
     # MOOCCube 上的实测不同：语义与热度取 0.5/0.5 时 HitRate@10 = 0.580，
     # 优于纯语义 0.443 与纯热度 0.493（MOOCCube 无评分，rating 权重为 0）。

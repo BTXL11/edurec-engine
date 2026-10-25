@@ -83,6 +83,29 @@ python -m scripts.run_batch_infer --data-source mooccube
 顶层不得有任何非整数数组字段、无 BOM、**先写临时文件再原子重命名**。
 推理前会校验编码器版本与**资源语料指纹**，与训练时不一致则报错退出。
 
+### 配合 platform（日常，无需手动）
+
+engine 是 platform 的离线推荐引擎。日常使用时**无需在本仓库手动操作**——在 platform 仓库执行：
+
+```bash
+cd ../edurec-platform
+bash scripts/handoff.sh        # 自动：导出快照 → 本仓库训练 + 推理 → 结果回传导入
+```
+
+`handoff.sh` 会自动用本仓库的 `.venv` 完成训练与全量推理，并把 `model/recommendations.json` 拷回 platform 导入。
+
+### 独立演示（本仓库单独跑）
+
+```bash
+python -m scripts.gen_sim_data        # 模拟数据 → dataset/sim
+python -m scripts.load_movielens      # 公开集 → dataset/ml_processed（首次会联网下载）
+```
+
+### 平台真实数据（手动，等价于 handoff.sh）
+
+快照由 platform 的 `export_snapshot` 产出后手动拷入 `dataset/platform_snapshot/<run_id>/`，
+契约与交接流程见 `docs/platform-contract.md`。
+
 ## 说明
 
 - `dataset/`、`model/` 不入库；engine 只读写本仓库。

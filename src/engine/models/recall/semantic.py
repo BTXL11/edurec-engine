@@ -67,15 +67,37 @@ class TwoTowerSemantic(nn.Module):
         """成对打分 (B,)：两个塔的内积。"""
         return (self.student_emb(need_emb) * self.item_emb(resource_emb)).sum(-1)
 
+    # --- 与阶段二（高斯双塔）对齐的接口 ---
+    # 阶段一是「方差为零的退化分布」：下面两个方法让两种塔可以走同一套
+    # 打分/评估代码，不必在下游到处判断模型类型。
+
+    def student_dist(self, need_emb: torch.Tensor,
+                     history_len: torch.Tensor | None = None
+                     ) -> tuple[torch.Tensor, torch.Tensor]:
+        """点表示的退化分布：(μ, σ) 中 σ 取一个极小常数，等价于只用均值。"""
+        mu = self.student_emb(need_emb)
+        std = torch.full_like(mu, 1e-6)
+        return mu, std
+
+    def calibrated_mean(self, mu: torch.Tensor,
+                        std: torch.Tensor | None = None) -> torch.Tensor:
+        """确定性塔没有不确定性可校准，直接返回均值。"""
+        return mu
+
     def forward(self, need_emb: torch.Tensor, pos_emb: torch.Tensor,
                 neg_emb: torch.Tensor | None = None,
-                tau: float | None = None) -> torch.Tensor:
+                tau: float | None = None,
+                history_len: torch.Tensor | None = None) -> torch.Tensor:
         """InfoNCE 损失：batch 内其它资源的向量作为负样本。
 
         logits[i, j] = <user_i, item_j> / tau，目标是对角线。这与 Word2Vec 的
         sampled softmax 同源：正样本对确定，负样本直接取 batch 内其它 item，
         零构造开销、实现简单。
+
+        `history_len` 是为与阶段二（高斯双塔）对齐接口而保留的参数——确定性表示里
+        没有不确定性可依赖它，因此忽略。
         """
+        del history_len                        # 确定性塔不使用历史长度
         tau = self.temperature if tau is None else tau
         ue = self.student_emb(need_emb)                       # (B, D)
         pe = self.item_emb(pos_emb)                           # (B, D)

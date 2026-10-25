@@ -174,32 +174,36 @@ def sample_candidates(rng: np.random.Generator, user: int, positives: set[int],
 
 def _sampled_frames(split: UserSequenceSplit, item_ids: list[int], config,
                     n_negatives: int, seed: int | None = None,
-                    use_val: bool = False):
-    """构造采样候选评估用的公共数据：(用户, 候选 ID, 正样本 ID, 需求文本)。
+                    use_val: bool = False, history_tail: int = 0):
+    """构造采样候选评估用的公共数据（含需求文本与候选集）。
 
-    三种评估（热门基线 / 纯文本相似度 / 训练后双塔）共用同一批候选集，
-    否则「谁更强」会被候选差异污染。
+    `history_tail > 0` 时把训练期历史截断到**最近 N 条**——用于构造「历史稀疏」场景：
+    此时更早的交互只作候选屏蔽用，不进入需求文本，模拟冷启动/需求模糊的用户。
+    三种评估（双塔 / 纯文本 / 热门）共用本函数，保证候选与需求完全一致。
     """
     index_of = {item: i for i, item in enumerate(item_ids)}
     rng = np.random.default_rng(config.seed if seed is None else seed)
     target_split = split.val if use_val else split.test
     frames = []
     for user, targets in target_split.items():
-        history = split.train.get(user, [])
+        history = sorted(split.train.get(user, []), key=lambda x: (x.ts, x.item))
         if not history or not targets:
             continue
         seen = {it.item for it in history}
         positives = {it.item for it in targets} - seen
         if not positives:
             continue
+        used = history[-history_tail:] if history_tail > 0 else history
         candidates = sample_candidates(rng, user, positives, seen, item_ids, n_negatives)
         frames.append({
             "row": len(frames),                    # 与打分矩阵的行号对齐
             "user": user,
             "candidates": candidates,              # 原始 item_id，顺序即索引基准
             "positive_idx": {index_of[p] for p in positives},
-            "need": need_text_from(history, config.recall_max_need_items),
+            "need": need_text_from(used, config.recall_max_need_items),
             "seen": seen,
+            "history_len": len(history),
+            "used_len": len(used),
         })
     return frames
 
@@ -234,20 +238,23 @@ def _metrics_from_scores(frames, scores_for, item_ids: list[int], config) -> dic
 def evaluate_sampled(model, encoder, bundle, split: UserSequenceSplit,
                      item_ids: list[int], config,
                      n_negatives: int = 99, seed: int | None = None,
-                     use_val: bool = False) -> dict[str, float]:
+                     use_val: bool = False, history_tail: int = 0) -> dict[str, float]:
     """采样候选下的评估：每个用户在自己的候选集里排序，统计正样本的名次。
 
     候选集 = 该用户测试期选过的课 + `n_negatives` 门他没选过的课。
     随机排序的期望 HitRate@K ≈ K / |候选|，因此报告里同时给出随机基线。
+    `history_tail > 0` 时只把最近 N 条历史用于构造需求（历史稀疏场景）。
     """
     item_texts = [next((resource_text(r) for r in bundle.resources
                         if r.resource_id == i), "") for i in item_ids]
     prepare_item_matrix(model, encoder, item_texts)
-    frames = _sampled_frames(split, item_ids, config, n_negatives, seed, use_val)
+    frames = _sampled_frames(split, item_ids, config, n_negatives, seed, use_val,
+                             history_tail)
     if not frames:
         return {}
     need_texts = [f["need"] for f in frames]
-    score_matrix = score_users(model, encoder, need_texts)     # (U, n_items)
+    used_lens = [f["used_len"] for f in frames]
+    score_matrix = score_users(model, encoder, need_texts, history_len=used_lens)
 
     def scores_for(frame, cand_idx):
         return score_matrix[frame["row"]][cand_idx]
@@ -257,12 +264,14 @@ def evaluate_sampled(model, encoder, bundle, split: UserSequenceSplit,
 
 def evaluate_popularity_sampled(split: UserSequenceSplit, item_ids: list[int], config,
                                 n_negatives: int = 99, seed: int | None = None,
-                                use_val: bool = False) -> dict[str, float]:
+                                use_val: bool = False,
+                                history_tail: int = 0) -> dict[str, float]:
     """采样候选下的热门基线：只按训练期被选次数排序，不看需求。"""
     from collections import Counter
 
     counts = Counter(it.item for acts in split.train.values() for it in acts)
-    frames = _sampled_frames(split, item_ids, config, n_negatives, seed, use_val)
+    frames = _sampled_frames(split, item_ids, config, n_negatives, seed, use_val,
+                             history_tail)
     if not frames:
         return {}
 
@@ -275,7 +284,8 @@ def evaluate_popularity_sampled(split: UserSequenceSplit, item_ids: list[int], c
 def evaluate_text_similarity_sampled(encoder, bundle, split: UserSequenceSplit,
                                      item_ids: list[int], config,
                                      n_negatives: int = 99, seed: int | None = None,
-                                     use_val: bool = False) -> dict[str, float]:
+                                     use_val: bool = False,
+                                     history_tail: int = 0) -> dict[str, float]:
     """纯文本相似度基线（**不训练**）：需求文本编码与资源编码直接做余弦。
 
     这条线是「双塔训练到底有没有用」的判据：
@@ -286,7 +296,8 @@ def evaluate_text_similarity_sampled(encoder, bundle, split: UserSequenceSplit,
                         if r.resource_id == i), "") for i in item_ids]
     encoder.fit(item_texts)
     item_mat = encoder.encode(item_texts)                       # (n_items, D)
-    frames = _sampled_frames(split, item_ids, config, n_negatives, seed, use_val)
+    frames = _sampled_frames(split, item_ids, config, n_negatives, seed, use_val,
+                             history_tail)
     if not frames:
         return {}
     need_mat = encoder.encode([f["need"] for f in frames])      # (U, D)

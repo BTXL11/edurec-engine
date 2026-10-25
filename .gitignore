@@ -9,6 +9,7 @@ env/
 .pytest_cache/
 .mypy_cache/
 .ipynb_checkpoints/
+.python-version
 
 # 模型工件与数据（体积大，不入库）
 model/
