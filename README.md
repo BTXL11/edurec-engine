@@ -113,3 +113,10 @@ python scripts/kg_server.py --host 127.0.0.1 --port 8090
   engine 未启动时只影响「自动生成概念」，不影响平台其他功能；
 - 与 docs/platform-contract.md 的文件交接并行：该服务是**可选**的在线能力，
   不改变「快照进、排名出」的主契约。
+
+## 目录结构
+
+- `src/kg/`：RDF 图谱、概念先修、嵌入与知识生成服务（本次从 EMBEDD-ER 迁入）。
+- `model/`：MOOCCube 数据、Wikipedia2Vec 权重与输出（体积大，不入库）。
+- `scripts/`：训练/推理/服务入口；`scripts/kg_server.py` 为知识生成服务入口。
+

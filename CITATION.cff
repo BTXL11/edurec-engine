@@ -1,0 +1,17 @@
+```yaml
+cff-version: 1.2.0
+message: "If you use this software, please cite the following paper."
+authors:
+  - family-names: Bazouzi
+    given-names: Aymen
+  - family-names: Foursov
+    given-names: Mickaël
+  - family-names: Le Capitaine
+    given-names: Hoël
+  - family-names: Miklos
+    given-names: Zoltan
+title: "EMBEDD-ER: EMBEDDing Educational Resources Using Linked Open Data"
+conference: "Proceedings of the 15th International Conference on Computer Supported Education"
+year: 2023
+doi: "10.5220/0012045300003470"
+url: "https://www.scitepress.org/Link.aspx?doi=10.5220/0012045300003470"
