@@ -16,6 +16,10 @@ model/
 dataset/
 artifacts/
 
+# 本地实验工作区（PRISM 参考实现、临时笔记，均不入库）
+PRISM/
+_scratch/
+
 # IDE / 系统
 .vscode/
 .idea/
