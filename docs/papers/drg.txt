@@ -1,0 +1,1408 @@
+
+
+===== PAGE 1 =====
+Contents lists available at ScienceDirect
+Neural Networks
+journal homepage: www.elsevier.com/locate/neunet
+Full Length Article
+DRG: A dual relational graph framework for course recommendation 
+Yong Ouyang
+a, Zhen Ye
+a, Lingyu Chen a, Huanwen Wang
+b,∗, Yawen Zeng a,∗
+a College of Computer Science, Hubei University of Technology, Wuhan, 430068, PR China
+b College of Computer Science and Software Engineering, Southwest Petroleum University, Chengdu, 610500, PR China
+a r t i c l e  i n f o
+Keywords:
+Course recommendation
+Course relationship graph
+Dual relationship graph
+Large language models
+ 
+a b s t r a c t
+The course recommendation system is a core application of recommendation technology in the educational ﬁeld. 
+Its signiﬁcance lies in accurately matching users’ interests and needs while providing valuable feedback to in-
+structors, thereby fostering continuous improvement in teaching quality. Various techniques have been proposed 
+for this purpose, with Large Language Models (LLMs) demonstrating signiﬁcant potential in course recommen-
+dation tasks. However, the issue of data sparsity remains a critical bottleneck that limits the accuracy of the 
+recommendation. In this study, we propose a Dual Relationship Graph (DRG) framework that addresses data 
+sparsity by modeling both course-course and user-course relationships through a dual-graph structure. Specif-
+ically, DRG constructs two relational graphs: a course-based graph built using LLM-based semantic reasoning, 
+collaborative ﬁltering, clustering, and association rule mining; and a user-based graph constructed via collab-
+orative ﬁltering and LLM-based preference inference. These graphs are integrated into a uniﬁed recommenda-
+tion pipeline through joint graph learning and collaborative reasoning. The enhanced interaction graphs signif-
+icantly alleviated sparsity, increasing link coverage by 37.88 % and 12.67 % on the two datasets, respectively. 
+Notably, DRG is designed as a plug-and-play module, compatible with both traditional models and LLM-based 
+recommendation systems. Experimental results show that our DRG excels in task ranking across two benchmark 
+datasets, signiﬁcantly enhancing traditional recommendation models and LLM-based methods. Moreover, DRG’s 
+dual relationship graph consistently outperforms single relationship approaches, underscoring the importance 
+of multi-perspective integration in course recommendation systems. By unifying dual-perspective graph model-
+ing with LLM-driven semantic understanding, DRG provides a scalable and eﬀective solution for personalized 
+course recommendation in sparse educational environments. The code and datasets will be made available at 
+https://github.com/WHCK1102/DRG.
+1.  Introduction
+With the rapid expansion of online education, numerous MOOC 
+(Massive Open Online Course) platforms now oﬀer an overwhelming 
+number of course options to a highly diverse user base (Khalid et al., 
+2022). Course recommendation systems, as a specialized application of 
+recommendation technology in education, focus on helping users pre-
+cisely match courses that best align with their interests and learning 
+needs (Jing & Tang, 2017). However, in practice, these systems often 
+suﬀer from sparse user-course interaction data, a challenge exacerbated 
+by the surge in course options, the diversity of learners, and the fact 
+that most users enroll in only a few courses, resulting in limited behav-
+ioral signals for modeling preferences (Algarni & Sheldon, 2023). This 
+sparsity signiﬁcantly degrades the accuracy of the recommendation, es-
+pecially for new or less active users, and limits the system’s ability to 
+∗Corresponding authors.
+ 
+E-mail addresses: oyywuhan@hbut.edu.cn (Y. Ouyang), 102311283@hbut.edu.cn (Z. Ye), 1710301027@hbut.edu.cn (L. Chen), huanwenwang@swpu.edu.cn 
+(H. Wang), yawenzeng@hbut.edu.cn (Y. Zeng).
+provide pedagogically meaningful suggestions. As a result, there is an 
+urgent need for more eﬀective algorithms that can overcome data spar-
+sity and better support personalized and educationally relevant course 
+recommendations.
+Over the years, various methods have been proposed to improve 
+course recommendation (Li et al., 2024b; Ng & Linn, 2017). Early ap-
+proaches such as collaborative ﬁltering (CF), matrix factorization (MF), 
+and clustering were widely adopted for their simplicity and eﬀective-
+ness in capturing user-course interactions (Aher & Lobo, 2013; Obei-
+dat et al., 2019; Pazzani & Billsus, 2007; Symeonidis & Malakoudis, 
+2019), but they typically struggle with sparse data and fail to capture 
+deeper dependencies between courses. With the rise of deep learning, 
+models based on recurrent neural networks (Hidasi et al., 2015), at-
+tention mechanisms (Zhou et al., 2018), and graph neural networks 
+(GNNs) (Zhang et al., 2023; Zhou et al., 2024) have improved the
+https://doi.org/10.1016/j.neunet.2025.107984
+Received 15 April 2025; Received in revised form 6 August 2025; Accepted 11 August 2025
+Neural Networks 193 (2026) 107984 
+Available online 14 August 2025 
+0893-6080/© 2025 Elsevier Ltd. All rights are reserved, including those for text and data mining, AI training, and similar technologies. 
+
+
+===== PAGE 2 =====
+Y. Ouyang et al.
+Fig. 1. The interaction line in (a) marks the user’s course learning sequence, and the last course is the result of direct recommendation using the LLM-based method. 
+(b) Comparison of data sparsity before and after processing in MOOCCube and MOOCData.
+precision of recommendation by incorporating contextual and structural 
+information (Xu & Zhou, 2020; Zhao & Zheng, 2023). More recently, 
+Large Language Models (LLMs), popularized by tools like ChatGPT1, 
+have demonstrated strong decision-making capabilities in open-domain 
+dialogue and content-based recommendation, presenting new opportu-
+nities for course recommendation systems (Bao et al., 2023; Bauer et al., 
+2023; Bewersdorﬀ et al., 2025; Khan et al., 2024).
+Although recent studies have highlighted the potential of LLMs in 
+this domain, most approaches focus on application-level integration 
+(Chen et al., 2023; Pal Chowdhury et al., 2024; Yigci et al., 2025) and 
+fall short in addressing fundamental challenges such as data sparsity 
+and the complex semantic dependencies between courses. As shown in 
+Fig. 1(a), the user had already completed the courses “C Programming 
+Language” and “Algorithm Design and Analysis”. However, ChatGPT di-
+rectly recommended “Data Structures” as the next course - an illogical 
+suggestion that deviates from the conventional teaching sequence, since 
+“Data Structures” is typically a prerequisite for “Algorithm Design and 
+Analysis”. This discrepancy illustrates the limitations of applying LLMs 
+in educational scenarios with sparse historical interaction data. In par-
+ticular, it reveals their lack of nuanced understanding of pedagogical 
+structures, underscoring the need for more robust and context-aware 
+approaches to fully realize the potential of LLMs in course recommen-
+dation tasks.
+To address these limitations, we propose a Dual Relational Graph 
+(DRG) framework for course recommendation. As illustrated in Fig. 2, 
+the DRG framework consists of three key components: user historical 
+interactions, course relationship graphs, and LLM-based recommenda-
+tions. Speciﬁcally, we construct two relationship graphs: a course-based 
+graph, which integrates LLM reasoning, collaborative ﬁltering, cluster-
+ing, and association rule mining to capture intercourse relationships; 
+and a user-based graph, which combines LLM reasoning with collabora-
+tive ﬁltering to uncover potential course relationships based on shared 
+user preferences. By jointly reasoning over both graphs, DRG mitigates 
+data sparsity, improves recommendation relevance and diversity, and 
+identiﬁes pedagogically aligned courses to enrich interaction course 
+data. As shown in Fig. 1(b), our strategy reduces data sparsity and im-
+proves MOOCData and MOOCCube by 37.88 % and 12.67 %, respec-
+1 https://chatgpt.com/chatgpt/
+tively. In particular, the enhanced interaction data produced by this 
+strategy is fully plug-and-play and can be applied to a wide range of 
+both traditional and LLM-based recommendation systems.
+The main contributions of this work can be summarized as follows:
+• To the best of our knowledge, this work represents the ﬁrst attempt to 
+introduce a dual relationship graph strategy for course recommen-
+dation systems, speciﬁcally designed to address data sparsity and 
+enhance recommendation reliability.
+• We proposed a course recommendation framework with relation 
+graphs of users and courses, leveraging the extensive knowledge base 
+and powerful reasoning abilities of collaborative ﬁltering, clustering, 
+lesson planning, and LLM-based methods, to thoroughly explore po-
+tential course relationships.
+• The proposed DRG framework has been extensively tested on two 
+public datasets, MOOCCube and MOOCData, signiﬁcantly enhanc-
+ing traditional recommendation models and LLM-based methods. 
+The code and datasets will be made available at https://github.com/
+WHCK1102/DRG.
+2.  Related work
+With the rapid expansion of course resources on large-scale online 
+learning platforms, users are increasingly faced with the problem of in-
+formation overload (Aher & Lobo, 2013). Course recommendation sys-
+tems have gained signiﬁcant attention as an eﬀective solution, aiming to 
+capture the unique characteristics of learners and learning needs to pro-
+vide personalized course suggestions (Symeonidis & Malakoudis, 2019). 
+In this section, we brieﬂy review the literature most relevant to our 
+work, focusing on traditional course recommendation approaches and 
+the emerging application of LLMs in educational recommendation sys-
+tems.
+2.1.  Traditional methods for course recommendation
+In the early stages of course recommendation research, various tech-
+niques were explored to model user preferences and course relation-
+ships. These included CF-based methods (Ray & Sharma, 2011; Symeoni-
+dis & Malakoudis, 2019), prerequisite-based course modeling (Chanaa 
+& El Faddouli, 2024; Parameswaran et al., 2011), evaluation techniques 
+Neural Networks 193 (2026) 107984 
+2 
+
+
+===== PAGE 3 =====
+Y. Ouyang et al.
+Fig. 2. Schematic illustration of the Dual Relationship Graph (DRG) framework construction and next course prediction. The course-based relationship graph 
+integrates clustering, collaborative ﬁltering, association rules, and LLM methods, while the user-based relationship graph combines collaborative ﬁltering and LLM 
+approaches to uncover latent connections between courses.
+(Sabnis et al., 2018), and neural network-based approaches (Jiang et al., 
+2019; Jing & Tang, 2017). Many of these methods were valued for their 
+simplicity and eﬀectiveness in handling sparse user-course interaction 
+data. With the development of deep learning and its applications in di-
+verse ﬁelds (Cao et al., 2023; Li et al., 2020), later studies introduced 
+more advanced models to capture richer user and course representa-
+tions. For example, attention mechanisms combined with reinforcement 
+learning (Lin et al., 2021; Zhang et al., 2019), hybrid models integrating 
+attention with graph neural networks (GNNs) (Gong et al., 2020; Wang 
+et al., 2023, 2022b), and multi-source fusion frameworks (Xu & Zhou, 
+2020; Yang & Cai, 2022) have been proposed to improve adaptability 
+and robustness. In particular, GNN-based approaches (Li et al., 2024a; 
+Sun et al., 2024) have shown promise in alleviating sparsity by leverag-
+ing course co-enrollment patterns and uncovering latent relationships in 
+the interaction graph. Despite these advances, challenges remain (Zhang 
+et al., 2024). Many existing methods still rely heavily on limited interac-
+tion data, and their ability to incorporate deeper semantic or pedagogi-
+cal relationships between courses is often constrained by the quality and 
+granularity of available features.
+2.2.  Application of LLMs in education
+Recently, LLMs have attracted increasing attention in the educa-
+tion domain, demonstrating potential across diverse applications such 
+as providing student feedback and assistance (Bauer et al., 2023; Dai 
+et al., 2023), generating course concepts (Ehara, 2023), oﬀering tutoring 
+support (Pardos & Bhandari, 2023), evaluating open-ended questions 
+(Botelho et al., 2023), providing programming error feedback (Phung 
+et al., 2023), and supporting AI training (Chang et al., 2022; Markel 
+et al., 2023). In the area of course recommendation, several studies have 
+begun exploring the use of LLMs to address challenges like data spar-
+sity and personalization (Abu-Rasheed et al., 2024a; Lyu et al., 2023; 
+Ma et al., 2025). For example, Van Deventer et al. (2024) proposed an 
+LLM-based course recommendation system using retrieval augmented 
+generation on course descriptions. In this context, Rao and Lin (2024) 
+introduced a framework that uses LLMs to improve recommendation ac-
+curacy, mitigate cold-start problems, and support personalized learning. 
+Similarly, Khan et al. (2024) applied LLMs in Educational Data Min-
+ing to enhance recommendation performance, and Abu-Rasheed et al. 
+(2024b) integrated LLMs with knowledge graphs to support problem-
+based learning path generation. Building on these eﬀorts, this paper ex-
+plores the integration of LLMs with complementary techniques such as 
+course planning, clustering, and collaborative ﬁltering to uncover la-
+tent course relationships. The objective is to improve recommendation 
+accuracy, alleviate the eﬀects of interaction sparsity, and enhance the 
+pedagogical relevance of the recommended courses.
+3.  Method
+This section presents the Dual Relational Graph (DRG) framework 
+for course recommendation. As shown in Fig. 2, the overall framework 
+consists of three key stages: (1) preprocessing of user-course interaction 
+data, (2) construction of two complementary relationship graphs, and 
+(3) recommendation generation through joint reasoning. Speciﬁcally, 
+we ﬁrst leverage historical interaction data to construct two comple-
+mentary graphs: one course-based and one user-based. The course-based 
+graph integrates multiple sources-LLM reasoning, collaborative ﬁltering, 
+clustering, and association rule mining-to capture inter-course relation-
+ships. The user-based graph combines LLM reasoning with collaborative 
+ﬁltering to reveal user preferences. These graphs provide structural and 
+semantic representations that serve as the foundation for personalized 
+recommendation.
+To further clarify the internal workﬂow of the DRG framework, Fig. 3 
+presents the architectural pipeline outlining the end-to-end data process-
+ing and recommendation ﬂow. Starting from a learner’s historical course 
+records, DRG constructs course-based and user-based relationship en-
+hancement through a combination of techniques. These enhanced rela-
+tionships form a dual relational graph, which is used to generate can-
+didate course recommendations. A tailored prompting mechanism then 
+transforms these candidates into structured inputs for the LLM-based 
+model, which generates recommendation results. The output is sub-
+jected to expert judgment (system-based reliability checks). If the rec-
+ommendation passes the reliability threshold, it is delivered to the user; 
+otherwise, the system triggers a retry mechanism to re-evaluate candi-
+date relationships and regenerate recommendations. Notably, DRG is 
+designed as a plug-and-play framework, making it applicable to a wide 
+range of traditional recommendation systems as well as LLM-based sys-
+tems.
+This architecture illustrates the full workﬂow of DRG-from his-
+tory interaction data ingestion, multi-source relationship mining, dual
+Neural Networks 193 (2026) 107984 
+3 
+
+
+===== PAGE 4 =====
+Y. Ouyang et al.
+Fig. 3. DRG architectural diagrams. It illustrates the full workﬂow from history interaction data to ﬁnal recommendation output.
+relational graph construction, to LLM-integrated recommendation gen-
+eration and feedback correction–highlighting its adaptability and ro-
+bustness in handling sparse educational data.
+3.1.  Problem formulation
+The core objective of the course recommendation task is to accu-
+rately predict a list of courses that users are likely to ﬁnd interesting 
+in the future, based on their past learning records using data analysis 
+techniques and algorithmic models.
+Let 𝑈 = [𝑢1, 𝑢2, … , 𝑢|𝑈|
+] represent the set of all unique users, and 
+𝐶 = [𝑐1, 𝑐2, … , 𝑐|𝐶|
+] be a set of courses in the MOOCs platform. For 
+each user 𝑢, given her proﬁle, i.e., the historical enrolled courses are 
+represented as 𝐶𝑢= [𝑐𝑢
+1, 𝑐𝑢
+2, … , 𝑐𝑢
+𝑛
+], where 𝑐𝑢
+𝑘∈𝐶, and 𝑘 denotes the 𝑘th 
+enrolled course in the current historical interaction records. we are 
+aiming at recommending courses 𝑐𝑢
+𝑛+1 that user 𝑢 would enroll at next
+time.
+3.2.  Course-based relationship enhancement graph
+To thoroughly analyze the intrinsic connections among courses and 
+eﬀectively address the challenges posed by data sparsity, we carefully 
+constructed a multi-dimensional, integrative course relationship en-
+hancement graph based on the course’s perspective. This enhancement 
+enable a detailed and nuanced capture of the complex interrelationships 
+among courses. The following sections explore the core aspects of these 
+relationship-mining algorithms in detail.
+3.2.1.  Course-based LLM relationship mining
+Given GPT’s exceptional capabilities in semantic understanding and 
+reasoning, we leverage GPT technology to extract course information 
+and uncover latent relationships among courses based on users’ past 
+enrollment records, enriching the user-course interaction data. This ap-
+proach not only eﬀectively mitigates data sparsity but also enables more 
+precise and comprehensive representations of users and courses, signif-
+icantly enhancing the performance of the course recommendation sys-
+tem. To enable the GPT model to process course data, we ﬁrst convert 
+the course information into text format. Speciﬁcally, we transform de-
+tails such as course names, descriptions, and prerequisite requirements 
+into structured text descriptions so that GPT can understand and gener-
+ate relevant course interactions. Then, we utilized the GPT-3.5 API along 
+Prompt 1:
+You are a senior university course planner, skilled in
+recommending the next course of interest to users based on
+their course history and learning sequence. Given the user’s
+interacted course {History Course}, select the most likely
+course from the remaining {Candidate Courses 1}.
+The output should be ….
+Prompt 2:
+You are a senior university course planner, based on the user’s
+historical interaction records {History Course}, analyze and
+predict the next courses they might be interested in, selecting
+from courses in the same category {Candidate Courses2} those
+previously interacted with. The output should be ….
+with users’ historical course interactions to generate potential course in-
+teractions through two prompts. The designs of the two prompts are as 
+follows:
+Among them, “History Course” represents the courses already com-
+pleted by the user, while “Candidate Courses 1” includes all other 
+courses in the dataset that the user has not yet interacted with. To better 
+explore course relationships and improve eﬃciency, we further reﬁne 
+the scope of “Candidate Courses ” to include only those courses of the 
+same category as the user has already engaged with, deﬁning this subset 
+as “Candidate Courses 2”. The classiﬁcation of these courses is based on 
+the original subject categorization from the two datasets, as shown in 
+Fig. 4.
+In addition, to ensure reliability, GPT-3.5-generated courses were re-
+viewed by nine professional educators, including four curriculum spe-
+cialists from an academic aﬀairs oﬃce and ﬁve university-level com-
+puter science instructors. With 5–13 years of teaching and curriculum 
+experience, they provided thorough and informed evaluations.
+3.2.2.  Clustering-based relationship mining
+In course recommendation systems, employing clustering methods 
+to explore the relationship graph among courses has proven to be an 
+eﬀective strategy (Liu et al., 2019; Shen et al., 2024). The core idea is to 
+Neural Networks 193 (2026) 107984 
+4 
+
+
+===== PAGE 5 =====
+Y. Ouyang et al.
+Fig. 4. Course classiﬁcation statistics of MOOCCube and MOOCData.
+reveal the diﬀerences among courses by ensuring high similarity within 
+clusters and low similarity among clusters. Speciﬁcally, we ﬁrst ran-
+domly selected one course as the initial cluster center 𝜇. Subsequently, 
+we calculated the Euclidean distance 𝐷(𝑐𝑖) between each course 𝑐𝑖 and 
+the current center 𝜇. To determine the next cluster center, we assigned 
+a probability to each course that was proportional to the square of its 
+distance from the nearest cluster center and then sampled a new cen-
+ter based on this probability distribution. This process is repeated until 
+the cluster center no longer changes signiﬁcantly. The calculation is as 
+follows:
+𝐷(𝐜𝑖
+) = min
+1≤𝑟≤𝑘
+‖‖𝐜𝑖−𝝁𝑟‖‖
+2
+𝑃(𝐜𝑖
+) =
+𝐷(𝐜𝑖
+)2
+∑𝑛
+𝑟=1 𝐷(𝐜𝑟
+)2
+𝝁𝑟=
+1
+||𝑆𝑟||
+∑
+𝑐∈𝑆𝑟
+𝑐
+(1)
+where 𝐷(𝐜𝑖) represents the distance from course 𝐜𝑖 to the central course 
+point 𝝁𝑟 (𝑟= 1, 2, …, 𝑘 ), 𝑘 represents the number of cluster centers. 
+We determine the optimal number of clusters 𝑘 by selecting the value 
+that maximizes the gap statistic, which quantiﬁes the discrepancy be-
+tween the within-cluster dispersion of the observed data and that of a 
+reference uniform distribution. 𝑃(𝐜𝑖
+) represents the probability that the 
+course node 𝑐𝑖 is selected as the next cluster center. 𝝁𝑟 represents the 
+new position of the 𝑟-th cluster center. 𝑆𝑟 is the set of course points 
+belonging to the 𝑟-th cluster. 𝑐 is the course point belonging to cluster 
+𝑆𝑟.
+Furthermore, for each course node, we calculate its distance to all 
+other nodes within the same cluster. If the distance between two nodes 
+falls below a predeﬁned threshold of 0.3, we create an edge between 
+them. This threshold-based method is a common and eﬃcient approach 
+in graph construction (Cheng et al., 2015), particularly in clustering-
+based relationship graphs, as it oﬀers a straightforward way to deﬁne 
+edges based on local proximity. It enables a more ﬁne-grained repre-
+sentation of spatial relationships between course nodes within the same 
+cluster. To select an appropriate threshold, we conducted empirical com-
+parisons using a range of values 0.1, 0.3, … , 0.9. Among these, the thresh-
+old of 0.3 yielded graph structures that were more stable and inter-
+pretable across downstream tasks, and thus was adopted in our frame-
+work.
+3.2.3.  Course-based CF relationship mining
+The core objective of course-based CF methods is to uncover po-
+tential similarities among courses by analyzing the interaction data 
+between users and courses. In essence, this involves identifying other 
+courses that are highly similar to those selected by the target user and 
+using these similarities to establish connections. Speciﬁcally, we calcu-
+late the similarity among courses by using the number of co-interacting 
+users, which is calculated using Jaccard similarity:
+sim(𝑐𝑖, 𝑐𝑗) =
+|||𝑈𝑐𝑖∩𝑈𝑐𝑗
+|||
+|||𝑈𝑐𝑖∪𝑈𝑐𝑗
+|||
+(2)
+where 𝑈𝑐𝑖 represents the set of users who interact with course 𝑐𝑖, |𝑈𝑐𝑖∩
+𝑈𝑐𝑗| represents the number of users who interact with both courses 𝑢𝑖
+and 𝑢𝑗, and |𝑈𝑐𝑖∪𝑈𝑐𝑗| represents the total number of users who interact 
+with courses 𝑐𝑖 or 𝑐𝑗.
+3.2.4.  Association rules-based relationship mining
+To further explore potential relationships among courses, we em-
+ployed a methodology combining course plans with association rule 
+mining. This approach aims to uncover richer logical sequences and pre-
+requisite relationships, thereby enhancing the authenticity of our course 
+relationship graph. Speciﬁcally, ﬁrst, we normalized course informa-
+tion using TF-IDF and keyword matching to align it with our MOOC 
+dataset. We extracted prerequisite relationships through both explicit 
+course sequencing in academic plans and implicit patterns revealed by 
+association rule analysis. Finally, these relationships underwent rigor-
+ous validation by domain experts to ensure their accuracy. For exam-
+ple, as illustrated in Fig. 1(a), the user must master the concepts of 
+“Discrete Mathematics” and “Probability Theory” before studying “Data 
+Structures”. This reﬂects the complex dependencies and progression 
+among courses, highlighting that learning is a systematic and continuous
+process.
+Next, we utilized the Apriori association rule (Agrawal & Srikant, 
+1994) mining to further investigate the relationships among courses. 
+Firstly, we transformed student’ historical course records into a trans-
+actional format suitable for association rule mining. Secondly, we em-
+ployed the Apriori algorithm to mine association rules based on two 
+key indicators: support and conﬁdence, where support is the frequency 
+of co-occurrence of courses in enrollment records, and conﬁdence is 
+the possibility that students who took course 𝑐1 also take course 𝑐2. 
+These metrics were chosen to identify meaningful and statistically sig-
+niﬁcant course relationships. Subsequently, the mined rules were ﬁl-
+tered and validated against the course plan (e.g., prerequisites, follow-
+up courses) to ensure logical consistency. Rules that aligned with 
+the course plan were retained. Through the above steps, the associa-
+tion rules allowed us to uncover hidden course relationships and en-
+hance the course plan with data-driven insights. These combinations 
+reveal patterns of co-occurrence, providing robust evidence for course
+recommendations.
+This comprehensive approach enabled us to uncover rich and com-
+plex interrelations among courses, culminating in the course relation-
+ship graph 𝐺𝐶= (𝐶1, 𝐸1). This graph serves as a robust foundation for 
+delivering highly personalized and accurate course recommendations.
+3.3.  User-based course relationship enhancement graph
+Similarly, to comprehensively capture the complex interconnections 
+among courses and mitigate the sparsity of course data, we constructed 
+an integrated course relationship enhancement graph based on the user’s 
+perspective. The following sections will detail the core principles and 
+implementation speciﬁcs of these relationship-mining algorithms.
+Neural Networks 193 (2026) 107984 
+5 
+
+
+===== PAGE 6 =====
+Y. Ouyang et al.
+Prompt 3:
+You are a senior university course planner, please predict the
+course that the user may be interested in next, based on the
+user’s historical interaction records {History Course}, and the
+candidate courses {Candidate Courses 3} that interacted with
+by adjacent users (adjacent users in timestamp-sorted records).
+The output should be ….
+Prompt 4:
+You are a senior university course planner, please predict the
+course that the user may be interested in next, based on the
+user’s historical interaction records {History Course}, and the
+candidate courses {Candidate Courses 4} that interacted with
+by similar users (identiﬁed via Jaccard similarity coeﬃcient). 
+The output should be …
+3.3.1.  User-based LLM relationship mining
+Given the outstanding performance of LLMs in logical reasoning 
+tasks, we continue to utilize the GPT-3.5 API in this section, similar to 
+the approach described in 3.2.1. This time, we focus on further explor-
+ing the latent relationships among courses through user relationships. 
+Accordingly, We designed the following two prompts:
+Among them, “History Course” refers to courses the user has in-
+teracted with, while “Candidate Courses 3” includes courses interacted 
+with by adjacent users. Similarly, we further reﬁne “Candidate Courses 
+3” by limiting it to the remaining courses that share the same interacting 
+users as the current user, designing this subset as “Candidate Courses 
+4”. Meanwhile, we also make a detailed distinction between interac-
+tion courses of “adjacent users" and “similar users": the former refers to 
+courses interacted with by users adjacent to the current user in the time 
+sequence within the dataset, while the latter refers to courses interacted 
+with by users with similar interests or behaviors, identiﬁed using the 
+Jaccard similarity coeﬃcient.
+Similarly, to ensure reliability, GPT-3.5-generated courses were re-
+viewed by nine professional educators, including four curriculum spe-
+cialists from an academic aﬀairs oﬃce and ﬁve university-level com-
+puter science instructors. With 5–13 years of teaching and curriculum 
+experience, they provided thorough and informed evaluations.
+3.3.2.  User-based CF relationship mining
+In user-based CF methods, the primary objective is to identify a group 
+of users with interests similar to those of the target user. By analyz-
+ing the historical behavior patterns of these similar users, we can un-
+cover and predict the courses that the target user may ﬁnd interesting–
+essentially recommending courses preferred by users with compara-
+ble interests. Speciﬁcally, we calculate the similarity between diﬀerent 
+users and select those with high similarity scores as candidates for rec-
+ommendations. The Jaccard similarity coeﬃcient is employed for this
+calculation:
+sim(𝐶𝑢𝑖, 𝐶𝑢𝑗) =
+||𝐶𝑢𝑖∪𝐶𝑢𝑗||
+||𝐶𝑢𝑖∩𝐶𝑢𝑗||
+(3)
+where ||𝐶𝑢𝑖∩𝐶𝑢𝑗|| represents the number of courses selected by both user 
+𝑢𝑖 and 𝑢𝑗, while ||𝐶𝑢𝑖∪𝐶𝑢𝑗|| denotes the total number of distinct courses 
+interacted with by the two users. Based on the comparative analysis from 
+experiments, users with a similarity score exceeding 0.7 are deﬁned as 
+similar users. The courses they have interacted with are then considered 
+as candidate recommendations.
+In the construction of the user-based course relationship graph, we 
+utilized both the above methods to explore the relationships among 
+courses, resulting in a user-based course relationship graph denoted 
+as 𝐺𝑈= (𝐶2, 𝐸2). This approach establishes a foundation for achiev-
+ing highly personalized and accurate course recommendations in subse-
+quent stages.
+3.4.  Course recommendations
+In the previous section, we conducted an in-depth analysis to obtain 
+both the course-based relationship graph 𝐺𝐶= (𝐶1, 𝐸1) and the user-
+based course relationship graph 𝐺𝑈= (𝐶2, 𝐸2). In this section, we will 
+present the speciﬁc course candidate data and the corresponding rec-
+ommendation rules.
+In constructing the candidate courses, for any user’s historical course 
+selection 𝐶𝑢= (𝑐𝑢
+1, 𝑐𝑢
+2, … , 𝑐𝑢
+𝑛
+), we select only the ﬁrst-order neighbors 
+of the course node 𝑐𝑢
+𝑛 from both the course-based relationship graph 
+and the user-based course relationship graph as the candidate courses 
+for that user. Speciﬁcally, in the course-based relationship graph 𝐺𝐶=
+(𝐶1, 𝐸1), let 𝐺𝐶(𝑐𝑢
+𝑛) denote the set of ﬁrst-order neighbor nodes of 𝑐𝑢
+𝑛
+within 𝐺𝐶. Here, ﬁrst-order neighbors refer to nodes directly connected 
+to 𝐺𝐶(𝑐𝑢
+𝑛) via edges in 𝐺𝐶, representing courses with immediate relation-
+ships (e.g., prerequisites or thematic similarities). This can be formally 
+expressed as:
+𝐺𝐶
+(𝑐𝑢
+𝑛
+) = {𝑐𝑢
+𝑛+1 ∈𝐶1 ∣(𝑐𝑢
+𝑛, 𝑐𝑢
+𝑛+1
+) ∈𝐸1}
+(4)
+To more accurately deﬁne the relevant ﬁrst-order neighbor courses, 
+we employed a selection strategy based on relationships derived from 
+four diﬀerent methods. Speciﬁcally, we ﬁrst identiﬁed courses that were 
+conﬁrmed to have associations across all four methods. Then, we se-
+lected courses that displayed relationships in three of the methods, and 
+continued this process accordingly. Through this rigorous selection and 
+ranking process, we ultimately identiﬁed 𝑋𝐺𝐶 courses to constitute the 
+candidate course set derived from the course relationship graph. It can 
+be speciﬁcally expressed as:
+𝑋𝐺𝐶
+(𝑐𝑢
+𝑛
+) = sort ((𝑐𝑢
+𝑛+1, 𝑓(𝑐𝑢
+𝑛+1
+)) ∣𝑐𝑢
+𝑛+1 ∈𝐺𝐶
+(𝑐𝑢
+𝑛
+))
+(5)
+Where 𝑓(𝑐𝑢
+𝑛+1) represents the ranking value of a course among all ﬁrst-
+order courses, and 𝑠𝑜𝑟𝑡(.) is the sorting function.
+Similarly, in the user-based course relationship graph 𝐺𝑈= (𝐶2, 𝐸2), 
+let 𝐺𝑈(𝑐𝑢
+𝑛) denote the set of ﬁrst-order neighbor nodes of 𝑐𝑢
+𝑛 within 𝐺𝑈, 
+which can be expressed as:
+𝐺𝑈
+(𝑐𝑢
+𝑛
+) = {𝑐𝑢
+𝑛+1 ∈𝐶2 ∣(𝑐𝑢
+𝑛, 𝑐𝑢
+𝑛+1
+) ∈𝐸2}
+(6)
+To further reﬁne the selection of relevant ﬁrst-order neighbor 
+courses, we ﬁrst ﬁltered courses that showed relationships across two 
+methods. For courses with relationships identiﬁed by only one method, 
+we prioritized those derived from LLM-based course relationships. Fi-
+nally, we obtained 𝑌𝐺𝑈 courses as the set of candidate courses. It can 
+be speciﬁcally expressed as:
+𝑌𝐺𝑈
+(𝑐𝑢
+𝑛
+) = sort ((𝑐𝑢
+𝑛+1, 𝑓(𝑐𝑢
+𝑛+1
+)) ∣𝑐𝑢
+𝑛+1 ∈𝐺𝑈
+(𝑐𝑢
+𝑛
+))
+(7)
+Inspired by previous work (Dhingra et al., 2016; Wang et al., 2022a; 
+Zhang J, 2018), we use a gated fusion function to eﬀectively measure 
+the credibility of the relationship among courses in the two relationship 
+graphs. This combination helps to more accurately identify and reﬂect 
+the user’s real interests, thereby improving the accuracy of course pre-
+diction, which can be expressed as:
+𝑁𝐺= (𝛽𝑋𝐺𝐶
+) ∪((1 −𝛽)𝑌𝐺𝑈
+)
+(8)
+Where 𝛽 represents the control threshold of the gate, It outputs a scalar 
+value within the range of [0, 1] based on the features of the inputs 𝑋𝐺𝐶
+and 𝑌𝐺𝑈. This value is used to control the weights of 𝑋𝐺𝐶 and 𝑌𝐺𝑈
+during the fusion process, thereby inﬂuencing the calculation of the ﬁnal 
+candidate courses. 𝑁𝐺 represents the ﬁnal candidate courses.
+To determine the ﬁnal course recommendations, we integrated the 
+DRG framework with LLM-based models (e.g., Qwen1-8B, GenRec), 
+which are leveraged to infer the courses most likely to match the user’s 
+interests. The prompt template used in this process is detailed below:
+Neural Networks 193 (2026) 107984 
+6 
+
+
+===== PAGE 7 =====
+Y. Ouyang et al.
+Prompt:
+You are an experienced course planner, capable of selecting
+reasonable courses for users to enroll in next based on the
+relevant data provided. The user’s historical interactive
+course 𝐶𝑢= (𝑐𝑢
+1, … , 𝑐𝑢
+𝑛) , and the candidate courses 𝑁𝐺. 
+Please select the course 𝑁𝐶 the user is most likely interested in.
+Table 1 
+The relevant statistical description of the dataset.
+ Dataset
+ Users
+ Items
+ Interactions
+ Density
+ Sparsity
+ MOOCCube
+ 4723
+ 706
+ 24933
+ 0.75 %
+ 99.25 %
+ MOOCData
+ 8216
+ 667
+ 129643
+ 2.37 %
+ 97.63 %
+4.  Experiments
+In this section, we will ﬁrst describe the dataset, the basic ex-
+perimental settings, and some classic models and large-scale model
+baselines. Then, we will validate the speciﬁc eﬀects of our proposed 
+DRG framework on two educational datasets, MOOCCube and MOOC-
+Data. Additionally, we will analyze the generalize ability of DRG to an-
+swer four research questions:
+• RQ1 Does the proposed DRG framework improve existing state-of-
+the-art recommenders across various experimental environments?
+• RQ2 What is the impact of diﬀerent enhanced DRG frameworks on 
+the predictions of various baseline models?
+• RQ3 Does diﬀerent parameter settings aﬀect our DRG framework?
+• RQ4 Does the DRG perform as a pre-training framework in enhanc-
+ing recommendation systems?
+4.1.  Dataset
+We selected two publicly available real-world datasets, MOOCCube 
+and MOOCData, to evaluate our approach. Table 1 summarizes the rel-
+evant statistics of these datasets.
+MOOCCube is a large-scale, open-source dataset designed to support 
+research in massive open online education2. It contains course metadata, 
+historical learning records, and social information reﬂecting the learn-
+ing behaviors of users. For this study, we utilized the MOOCQA sub-
+set of the repository, which focuses on user participation data relevant 
+to course recommendation tasks (Yu et al., 2020). The ﬁnal processed 
+dataset includes 706 courses, 4723 users, and 24,933 user-course inter-
+action records, which were converted into the interaction data format 
+required by recommendation systems.
+MOOCData is collected from XuetangX3, a leading MOOC platform 
+in China (Zhang et al., 2019). To ensure the representativeness and prac-
+tical utility of this dataset, we applied the following preprocessing steps: 
+(1) Merged identical course content oﬀered in diﬀerent years into a sin-
+gle course to eliminate the inﬂuence of temporal factors on data consis-
+tency. (2) Selected users who enrolled in at least ten courses, ensuring 
+that they had suﬃcient learning sequences and diverse interests. (3) Re-
+tained only courses that had been enrolled by at least ten users, ensuring 
+suﬃcient engagement and analyzability. The resulting dataset consists 
+of 667 courses, 8216 users, and 129,643 interaction records.
+To evaluate the proposed DRG framework, both datasets were split 
+into training, validation, and test sets in a 7:2:1 ratio. This split ensures a 
+robust evaluation by allocating 70 % of the data for training the model, 
+20 % for validation (to tune hyperparameters and prevent overﬁtting), 
+and 10 % for testing (to assess the model’s generalization performance 
+on unseen data).
+2 http://moocdata.cn/data/MOOCCube
+3 https://www.xuetangx.com/
+4.2.  Experimental settings
+4.2.1.  Evaluation metrics
+To comprehensively evaluate the performance of the DRG frame-
+work, following the same setting as previous baselines (He et al., 2020; 
+Li et al., 2023), we employed three widely adopted ranking-based met-
+rics: Precision@K (Kynkäänniemi et al., 2019), Recall@K (Kynkään-
+niemi et al., 2019), and NDCG@K (Yining et al., 2013). Speciﬁcally, 
+Precision@K measures the alignment between the top-K recommended 
+courses and the courses the user is actually interested in. Recall@K eval-
+uates the proportion of courses the user is genuinely interested in that 
+were correctly recommended within the top-K positions. NDCG@K fur-
+ther considers the ranking quality within the recommendation list, as-
+signing higher importance to correct recommendations appearing ear-
+lier in the list. Unless otherwise speciﬁed, Precision@K, Recall@K, and 
+NDCG@K are abbreviated as P@K, R@K and N@K, respectively. For 
+a fair comparison, we follow most baseline methods (e.g., LightGCN, 
+NGCF, and EHGCN ) and set the evaluation metrics P@K, R@K and 
+N@K to 20, respectively.
+Note that in all experimental evaluations involving LLM-based and 
+traditional methods, we employed Recall, NDCG, and Precision metrics 
+to evaluate traditional course recommendation models, while only Pre-
+cision was used to evaluate the LLM-based approach. This diﬀerence 
+in evaluation metrics is due to the distinct characteristics and evalua-
+tion goals of the LLM-based model. Speciﬁcally, the LLM is a generative 
+model that outputs a list of candidate courses rather than a directly 
+ranked recommendation list. Since the candidate courses generated by 
+the LLM require further processing (e.g., ranking or ﬁltering), directly 
+evaluating Recall and NDCG may not be appropriate.
+4.2.2.  Implementation details
+All experiments were implemented using PyTorch on a 12 GB Nvidia 
+RTX 4070 GPU. We tuned the parameters of traditional models, includ-
+ing the learning rate and the number of hidden layers, within the ranges 
+of {0.00001, 0.001, …, 0.1} and {1, 2, …, 5}, respectively. To address 
+the issue of course data sparsity, we employed various machine learn-
+ing techniques alongside OpenAI’s ChatGPT model (speciﬁcally, gpt-3.5-
+turbo) to generate courses that may engage learners. For the large lan-
+guage model, we tuned the temperature parameter over the set {0.1, 0.3, 
+..., 0.9} to control the randomness of the generated content. Addition-
+ally, we assessed the impact of diﬀerent learning rates {0.00001, 0.001, 
+..., 0.1} on the ﬁne-tuning performance of LLM-based components. To 
+ensure a fair comparison, both our approach and the baselines used a 
+ﬁxed embedding size of 64.
+4.2.3.  Baselines
+To comprehensively compare and validate the performance of the 
+DRG framework, we selected two groups of baseline methods: deep 
+learning-based approaches and large language model-based approaches. 
+The speciﬁc baselines are as follows:
+• LightGCN (He et al., 2020). It is a lightweight GCN model that sim-
+pliﬁes the architecture by retaining only the neighbor aggregation 
+operation, while removing feature transformation and non-linear ac-
+tivation. This streamlined structure enables eﬃcient performance in 
+recommendation tasks.
+• EHGCN (Li et al., 2023). It is a hybrid GCN model that combines 
+the strengths of GCN and HyperGCN to capture both pairwise and 
+higher-order complex interactions between users and items. This 
+approach generates richer user and item representations, enabling 
+more accurate predictions of user preferences.
+• NGCF (Wang et al., 2019). It is a GNN-based CF recommendation 
+model. By performing embedding propagation on the user-item in-
+teraction graph, and explicitly encodes collaborative signals in the 
+form of higher-order connections, thereby reﬁning the embeddings 
+of users and items and enhancing the performance of the recommen-
+dation system.
+Neural Networks 193 (2026) 107984 
+7 
+
+
+===== PAGE 8 =====
+Y. Ouyang et al.
+Table 2 
+Recommendation performance improves over all traditional backbone methods on diﬀerent 
+datasets in terms of Precision, Recall, and NDCG.
+ Data
+ MOOCCube
+ MOOCData
+ MODELS
+ Variants
+ P@20
+ R@20
+ N@20
+ P@20
+ R@20
+ N@20
+LightGCN
+ Base
+ 0.0697
+ 0.7206
+ 0.5905
+ 0.1270
+ 0.5334
+ 0.4478
+ Enhanced
+ 0.0748
+ 0.7926
+ 0.6444
+ 0.1387
+ 0.5836
+ 0.4794
+ (Best Imprv)
+↑7.3 %
+↑9.9 %
+↑9.1 %
+↑9.2 %
+↑9.4 %
+↑7.0 %
+EHGCN
+ Base
+ 0.0587
+ 0.6540
+ 0.4323
+ 0.1205
+ 0.5088
+ 0.4279
+ Enhanced
+ 0.0633
+ 0.6837
+ 0.4583
+ 0.1254
+ 0.5250
+ 0.4419
+ (Best Imprv)
+↑7.6 %
+↑4.6 %
+↑6.1 %
+↑4.1 %
+↑3.2 %
+↑3.4 %
+NGCF
+ Base
+ 0.0459
+ 0.5203
+ 0.3094
+ 0.0989
+ 0.4435
+ 0.3699
+ Enhanced
+ 0.0509
+ 0.5734
+ 0.3448
+ 0.1099
+ 0.4668
+ 0.3974
+ (Best Imprv)
+↑10.8 %
+↑10.2 %
+↑11.4 %
+↑11.1 %
+↑7.1 %
+↑7.4 %
+MixCF
+ Base
+ 0.0412
+ 0.4503
+ 0.2536
+ 0.0722
+ 0.3172
+ 0.2698
+ Enhanced
+ 0.0447
+ 0.4919
+ 0.2750
+ 0.0795
+ 0.3454
+ 0.2890
+ (Best Imprv)
+↑8.3 %
+↑9.2 %
+↑8.4 %
+↑10.1 %
+↑8.9 %
+↑7.1 %
+Table 3 
+Recommendation performance improves over all LLM backbone methods on 
+diﬀerent datasets in terms of Precision.
+ MODELS
+ MiniCPM2b
+ Qwen1-8b
+ ChatGLM-6b
+ GenRec
+ Data
+ Variants
+ P@20
+ P@20
+ P@20
+ P@20
+MOOCCube
+ Base
+ 0.3414
+ 0.1351
+ 0.3639
+ 0.1671
+ Enhanced
+ 0.3601
+ 0.1399
+ 0.4162
+ 0.1853
+ (Best Imprv)
+↑5.4 %
+↑3.6 %
+↑14.3 %
+↑10.8 %
+MOOCData
+ Base
+ 0.1756
+ 0.0899
+ 0.1953
+ 0.1088
+ Enhanced
+ 0.1834
+ 0.0979
+ 0.2112
+ 0.1140
+ (Best Imprv)
+↑4.5 %
+↑8.8 %
+↑8.1 %
+↑4.8 %
+• MixGCF (Huang et al., 2021). It is a GNN model that enhances neg-
+ative sampling techniques by incorporating two strategies: positive 
+mixing and hop mixing. These strategies improve the model’s ability 
+to distinguish between positive and negative sample boundaries, en-
+abling it to better capture both local and global collaborative signals 
+from users.
+• MiniCPM2b (Hu et al., 2024). It is a series of small language models 
+that can rival LLMs in capability, signiﬁcantly improving resource ef-
+ﬁciency and practical applicability. Additionally, their outstanding 
+performance across various application scenarios oﬀers new direc-
+tions for future LLM research.
+• Qwen1-8b (Bai et al., 2023). It is a Transformer-based LLM designed 
+for natural language processing tasks and various specialized appli-
+cations. Support cost-eﬀective deployment and multilingual cover-
+age.
+• ChatGLM-6b (GLM et al., 2024). It is a powerful and open-source 
+conversational language model that supports both Chinese and En-
+glish, with the ability to be deployed locally. This ﬂexibility has led 
+to its widespread application across multiple ﬁelds.
+• GenRec (Ji et al., 2024). It is a recommendation system based on 
+generative learning methods. It utilizes deep learning techniques, 
+especially generative models such as Generative Adversarial Net-
+works or Variational Autoencoders, to generate representations of 
+items that users might be interested in.
+4.3.  Recommended performance comparison (RQ1)
+To demonstrate the eﬀectiveness of DRG in improving recommen-
+dation performance, we integrate it into four state-of-the-art traditional 
+GNN-based models and four LLM-based models. Tables 2 and 3 present 
+the original performance of all models and their enhanced performance 
+on two publicly available datasets, MOOCCube and MOOCData.
+Comparing the evaluation results of the two tables, several inter-
+esting observations are found: (1) It is evident that, following the en-
+hancement with the DRG framework, all models exhibited signiﬁcant 
+improvements over their original versions across all evaluation metrics. 
+This provides compelling evidence for the reasonableness and eﬀective-
+ness of DRG. We attribute these enhancements to two main factors: i) 
+DRG enables precise course recommendations supported by LLMs, and 
+ii) the construction of multiple relationship graphs maximally exploits 
+the interconnected information among courses, thereby eﬀectively en-
+hancing the ﬁnal recommendation outcomes. (2) Overall, the percent-
+age improvement is higher for traditional models compared to LLM-
+based models, indirectly indicating that the integration of DRG with 
+traditional models enhances the accuracy of course recommendations. 
+(3) In terms of Precision evaluation, the traditional model LightGCN and 
+the LLM-based model ChatGLM-6b demonstrate the best performance 
+both before and after enhancement. For the Recall and NDCG evalua-
+tion metrics, the LightGCN model also exhibits optimal performance in 
+both cases. (4) Since our model only predicts individual courses, we only 
+calculate Precision. Furthermore, among the LLM-based baselines, the 
+ChatGLM-6b model notably achieves the best performance across both 
+datasets, while the GenRec model shows signiﬁcant improvement only 
+on the MOOCCube dataset. This diﬀerence may stem from ChatGLM-
+6b’s superior generalization capability, making it adaptable to diverse 
+application scenarios and user needs. In contrast, the GenRec model may 
+focus more on speciﬁc domains or datasets, and fail to eﬀectively lever-
+age the enhanced relational data.
+4.4.  Ablation study (RQ2)
+To further examine how diﬀerent types of relationship graphs af-
+fect model performance, we conducted an ablation study within the 
+DRG framework by comparing three conﬁgurations: course-based, user-
+based, and combined (dual) relational graphs. For this purpose, we 
+selected LightGCN as a representative of traditional recommendation 
+models and ChatGLM-6b as a representative of LLM-based models, and 
+evaluated the impact of each conﬁguration across multiple evaluation 
+metrics on both datasets.
+The key observations drawn from Table 4 are summarized as follows: 
+(1) Course-based Graph: This conﬁguration performs well across both 
+models, especially for LightGCN, where it outperforms the user-based 
+graph in most metrics. This suggests that course-level co-enrollment 
+patterns provide strong structural signals, particularly beneﬁcial for
+traditional collaborative ﬁltering models. However, in the case of 
+ChatGLM-6b, the performance of the course-based graph is relatively 
+lower, indicating that LLM-based models may not fully exploit struc-
+tural course relations without additional semantic enrichment. (2) User-
+based Graph: While slightly behind the course-based graph in LightGCN, 
+the user-based graph demonstrates competitive or even superior perfor-
+mance in ChatGLM-6b. This implies that user-level behavioral signals 
+Neural Networks 193 (2026) 107984 
+8 
+
+
+===== PAGE 9 =====
+Y. Ouyang et al.
+Table 4 
+Performance of single-relation vs. dual-relation graphs.
+ MODELS
+ LightGCN
+ ChatGLM-6b
+ Data
+ MOOCCube
+ MOOCData
+ MOOCCube
+ MOOCData
+ Index
+ P@20
+ R@20
+ N@20
+ P@20
+ R@20
+ N@20
+ P@20
+ P@20
+ Course-based Graph
+ 0.0729
+ 0.7398
+ 0.6049
+ 0.1345
+ 0.5534
+ 0.4629
+ 0.4073
+ 0.2015
+ User-based Graph
+ 0.0727
+ 0.7273
+ 0.6045
+ 0.1321
+ 0.5510
+ 0.4614
+ 0.4081
+ 0.2067
+ Dual Relational Graph
+ 0.0748
+ 0.7926
+ 0.6444
+ 0.1387
+ 0.5836
+ 0.4794
+ 0.4162
+ 0.2112
+Fig. 5. Impact of prompt design on LLM-based relationship mining and recommendation performance.
+are more compatible with LLM-based architectures, which are better 
+at leveraging semantic and user-centric cues to enhance representation 
+learning. (3) Dual Relational Graph: Combining both course- and user-
+based relations consistently yields the best performance across all set-
+tings. The dual graph outperforms both single-relation counterparts on 
+every metric, regardless of the model or dataset. This clearly demon-
+strates the complementary nature of course- and user-level signals, and 
+validates the eﬀectiveness of multi-relational fusion for capturing richer 
+contextual information.
+In summary, the results indicate that both course-based and user-
+based relationship graphs contribute diﬀerently to recommendation
+performance depending on the model. Importantly, integrating the two 
+into a uniﬁed dual relational graph leads to consistent performance im-
+provements, underscoring the value of heterogeneous relationship mod-
+eling in recommendation systems.
+To assess how diﬀerent prompts inﬂuence the eﬀectiveness of LLM-
+based relationship mining, we conducted an additional set of experi-
+ments using four distinct prompt templates: two course-based prompts 
+(Prompt 1 and Prompt 2) and two user-based prompts (Prompt 3 and 
+Prompt 4), denoted as P1, P2, P3, and P4, respectively. In each experi-
+ment, a single prompt was used to generate relationships, while all other 
+components of the DRG framework were kept constant. This setup en-
+ables isolating the eﬀect of prompt design on downstream recommen-
+dation performance.
+As shown in Fig. 5, using prompts generally leads to slight improve-
+ments over the baseline (R) without prompts, although the performance 
+diﬀerences among the four individual prompts are not always statisti-
+cally signiﬁcant. We further evaluated two merged-prompt variants: C 
+(a combination of P1 and P2 for course-based relations) and U (a com-
+bination of P3 and P4 for user-based relations). Compared to individual 
+prompt variants, both C and U yield better performance, demonstrating 
+the eﬀectiveness of multi-prompt fusion in relationship generation. In 
+addition, the G strategy, which comprehensively integrates all course re-
+lationships, achieves the best performance in all evaluation metrics of all 
+models, underscoring the importance of aggregating potential course re-
+lationships from multiple sources. Overall, the results suggest that while 
+prompt design has some inﬂuence, its impact is relatively moderate and 
+may vary depending on the model and dataset.
+4.5.  Impact of the parameter settings in the DRG framework (RQ3)
+To improve the accuracy of the course recommendation system inte-
+grating the DRG framework, we conducted a series of parameter tuning 
+experiments to determine the optimal model conﬁguration. For the tra-
+ditional model, we focused on adjusting the learning rate and hidden 
+layer parameters, while for the LLM-based model, we prioritized tuning 
+the learning rate and temperature coeﬃcient.
+Here, we present LightGCN and ChatGLM-6b as representative mod-
+els, with the results summarized in Fig. 6, leading to three key obser-
+vations: (1) The learning rate is a critical parameter in model training. 
+For the traditional model, the best performance was observed at a learn-
+ing rate of 1 × 10−3. However, for the LLM-based model, adjusting the 
+learning rate to 1 × 10−4 resulted in optimal performance. (2) The tra-
+ditional model shows relative insensitivity to the conﬁguration of the 
+hidden layer, especially when the hidden layer is set to 2 layers, achiev-
+ing the best performance. (3) The LLM-based method shows low sen-
+sitivity to the temperature coeﬃcient. No matter how the temperature 
+coeﬃcient changes, the prediction index maintains a small ﬂuctuation 
+range, which shows that the eﬀect of this parameter on the model per-
+formance is relatively limited. These ﬁndings highlight the importance 
+of tailored parameter tuning for both traditional and LLM-based models, 
+demonstrating how careful optimization can signiﬁcantly enhance the 
+performance of course recommendation systems.
+Neural Networks 193 (2026) 107984 
+9 
+
+
+===== PAGE 10 =====
+Y. Ouyang et al.
+Fig. 6. Performance of DRG w.r.t. various parameters.
+Fig. 7. Case visualization for course recommendation tasks. The number marked below each user and course corresponds to their respective IDs in the dataset. In 
+the prediction results of the last three columns, green boxes indicate correct predictions, while red boxes denote incorrect predictions.
+4.6.  Case study
+Accurately predicting the next course selection of a user is essential 
+in course recommendation tasks. To illustrate model performance, we 
+randomly selected three cases from users from the MOOCCube dataset as 
+case studies and visualized prediction outcomes across diﬀerent models. 
+Fig. 7 presents the actual prediction results of three models LightGCN, 
+EHGCN, and ChatGLM-6b using the DRG framework.
+Based on the experimental results, we draw the following ob-
+servations: (1) User course selection often follows a temporal se-
+quence aligned with university curriculum planning. For example, when
+predicting the next course of user 𝑢61, LightGCN recommended “Linux 
+system management”, which matches the timing but lacks direct rel-
+evance to course content, indicating a limitation in capturing course 
+preferences. Meanwhile, EHGCN recommended “The Path of Beauty”, 
+unrelated to the user’s historical course interactions, likely reﬂecting 
+personal interest, contributing to lower prediction accuracy. In con-
+trast, ChatGLM-6b accurately predicted “Big Data Application”, high-
+lighting the advantages of LLMs in learning and reasoning. (2) User 
+𝑢78 exhibits more variation and randomness in course selection, with 
+a focus on computer and physics-related subjects. ChatGLM-6b accu-
+rately recommended “Combinatorics”, aligning perfectly with the ac-
+tual selection. Conversely, LightGCN suggested “Core Technologies of 
+Big Data Platforms”, which deviated somewhat from the actual choice. 
+EHGCN’s recommendation of “Micro and Nano Febrication”, appeared 
+entirely random. (3) User course selection behavior often exhibits dis-
+tinct phases and patterns. Speciﬁcally, user 𝑢96 is currently focused 
+on studying highly applied courses. In this context, the course “Cloud
+Computing and Software Engineering” recommended by ChatGLM-6b 
+precisely aligns with the users’ actual course choice, while the course 
+“Software Engineering” recommended by EHGCN is reasonably aligned 
+in direction. In contrast, LightGCN’s recommendation of “Introduction 
+to Computer Graphics” appears somewhat misaligned, lacking clear rel-
+evance to the users’ recent course interactions.
+Overall, by integrating the DRG framework into the model, it can 
+more eﬀectively capture the relationships among courses and analyze 
+the underlying logic in users’ historical course interactions, enabling 
+more accurate course recommendations.
+Neural Networks 193 (2026) 107984 
+10 
+
+
+===== PAGE 11 =====
+Y. Ouyang et al.
+5.  Conclusions
+This paper addresses the challenge of course recommendation in 
+online education by introducing an innovative Dual Relational Graph 
+(DRG) framework. This framework leverages the advanced reasoning 
+capabilities and extensive knowledge base of LLMs while seamlessly
+integrating traditional methods such as collaborative ﬁltering, cluster-
+ing, and lesson planning. The DRG framework eﬀectively mitigates 
+the issue of data sparsity and uncovers intricate course relationships. 
+Experimental results demonstrate that, compared to the original ver-
+sion, integrating the DRG framework with the backbone recommenders 
+leads to signiﬁcant performance improvements on two public bench-
+mark datasets.
+6.  Limitations
+Nevertheless, the study has some limitations. First, while the DRG 
+framework reduces the impact of data sparsity, there remains room for 
+improvement in handling extremely sparse data scenarios. Second, the 
+training and inference processes of LLMs require signiﬁcant computa-
+tional resources, making model optimization to reduce costs a key di-
+rection for future research. Additionally, this study has only been vali-
+dated on two public datasets, and further evaluation and optimization 
+are needed in more diverse ﬁelds and real-world application settings. 
+Looking ahead, we will continue to deepen our research on this frame-
+work, aiming to further contribute to the advancement of online educa-
+tion.
+CRediT authorship contribution statement
+Yong Ouyang: Writing – review & editing; Zhen Ye: Writing – 
+original draft, Investigation; Lingyu Chen: Methodology, Investigation;
+Huanwen Wang: Writing – review & editing, Investigation; Yawen 
+Zeng: Methodology, Investigation.
+Declaration of competing interest
+The authors declare that they have no known competing ﬁnancial 
+interests or personal relationships that could have appeared to inﬂuence 
+the work reported in this paper. 
+References
+Abu-Rasheed, H., Abdulsalam, M.H., Weber, C., & Fathi, M. (2024a). Supporting student 
+decisions on learning recommendations: An llm-based chatbot with knowledge graph 
+contextualization for conversational explainability and mentoring. arXiv preprint 
+arXiv:2401.08517.
+Abu-Rasheed, H., Ikeda, R., Ferriyan, A., Weber, C., Fathi, M., Okawa, K., & Thamrin, A.H. 
+(2024b). Problem-based learning-path recommendations through integrating knowl-
+edge graphs and large language models. In Proceedings of the 14th international confer-
+ence on learning analytics and knowledge (pp. 5237–5268). 
+Agrawal, R., & Srikant, R. (1994). Fast algorithms for mining association rules. In Proceed-
+ings of the 20th international conference on very large data bases (pp. 487–499). 
+Aher, S.B., & Lobo, L. (2013). Combination of machine learning algorithms for recom-
+mendation of courses in e-learning system based on historical data. Knowledge-Based 
+Systems, 51, 1–14. 
+Algarni, S., & Sheldon, F. (2023). Systematic review of recommendation systems for course 
+selection. Machine Learning and Knowledge Extraction, 5(2), 560–596. 
+Bai, J., Bai, S., Yang, S., Wang, S., Tan, S., Wang, P., Lin, J., Zhou, C., & Zhou, J. (2023). 
+Qwen-vl: A frontier large vision-language model with versatile abilities. arXiv preprint 
+arXiv:2308.12966.
+Bao, K., Zhang, J., Zhang, Y., Wang, W., Feng, F., & He, X. (2023). Tallrec: An eﬀective 
+and eﬃcient tuning framework to align large language model with recommendation. 
+In Proceedings of the 17th ACM conference on recommender systems (pp. 1007–1014). 
+Bauer, E., Greisel, M., Kuznetsov, I., Berndt, M., Kollar, I., Dresel, M., Fischer, M. R., & 
+Fischer, F. (2023). Using natural language processing to support peer-feedback in the 
+age of artiﬁcial intelligence: A cross-disciplinary framework and a research agenda. 
+British Journal of Educational Technology, 54(5), 1222–1245. 
+Bewersdorﬀ, A., Hartmann, C., Hornberger, M., Seßler, K., Bannert, M., Kasneci, E., Kas-
+neci, G., Zhai, X., & Nerdel, C. (2025). Taking the next step with generative artiﬁcial 
+intelligence: The transformative role of multimodal large language models in science 
+education. Learning and Individual Diﬀerences, 118, 102601. 
+Botelho, A., Baral, S., Erickson, J.A., Benachamardi, P., & Heﬀernan, N.T. (2023). Lever-
+aging natural language processing to support automated assessment and feedback for 
+student open responses in mathematics. Journal of Computer Assisted Learning, 39(3), 
+823–840. 
+Cao, Y., Niu, Y., Tian, X., Peng, D., Lu, L., & Zhang, H. (2023). Development of a 
+knowledge-based healthcare-associated infections surveillance system in china. BMC 
+Medical Informatics and Decision Making, 23(1), 209. 
+Chanaa, A., & El Faddouli, N.e. (2024). Prerequisites-based course recommendation: 
+recommending learning objects using concept prerequisites and metadata matching. 
+Smart Learning Environments, 11, 16. 
+Chang, C.Y., Hwang, G.J., & Gau, M.L. (2022). Promoting students’ learning achievement 
+and self-eﬃcacy: A mobile chatbot approach for nursing training. British Journal of 
+Educational Technology, 53(1), 171–188. 
+Chen, Y., Ding, N., Zheng, H.T., Liu, Z., Sun, M., & Zhou, B. (2023). Empowering private 
+tutoring by chaining large language models. arXiv preprint arXiv:2309.08112.
+Cheng, Y.R., Yuan, Y., & Chen, L., Wang, G.R. (2015). Threshold-based shortest path query 
+over large correlated uncertain graphs. Journal of Computer Science and Technology, 30, 
+762–780. 
+Dai, W., Lin, J., Jin, H., Li, T., Tsai, Y.S., Gaševi´c, D., & Chen, G. (2023). Can large lan-
+guage models provide feedback to students? A case study on chatGPT. In 2023 IEEE 
+international conference on advanced learning technologies (ICALT) (pp. 323–325). IEEE.
+Dhingra, B., Liu, H., Yang, Z., Cohen, W.W., & Salakhutdinov, R. (2016). Gated-attention 
+readers for text comprehension. arXiv preprint arXiv:1606.01549.
+Ehara, Y. (2023). Measuring similarity between manual course concepts and chatGPT-
+generated course concepts. In Edm. 
+GLM, T., Zeng, A., Xu, B., Wang, B., Zhang, C., Yin, D., Rojas, D., Feng, G., Zhao, H., Lai, 
+H., Yu, H., Wang, H., Sun, J., Zhang, J., Cheng, J., Gui, J., Tang, J., Zhang, J., Li, 
+J.,…Wang, Z. (2024). ChatGLM: A family of large language models from GLM-130b to 
+GLM-4 all tools. arXiv preprint arXiv:2406.12793.
+Gong, J., Wang, S., Wang, J., Feng, W., Peng, H., Tang, J., & Yu, P.S. (2020). Attentional 
+graph convolutional networks for knowledge concept recommendation in moocs in a 
+heterogeneous view. In Proceedings of the 43th international ACM SIGIR conference on 
+research and development in information retrieval (pp. 79–88). 
+He, X., Deng, K., Wang, X., Li, Y., Zhang, Y., & Wang, M. (2020). Lightgcn: Simplifying and 
+powering graph convolution network for recommendation. In Proceedings of the 43th 
+international ACM SIGIR conference on research and development in information retrieval 
+(pp. 639–648). 
+Hidasi, B., Karatzoglou, A., Baltrunas, L., & Tikk, D. (2015). Session-based recommenda-
+tions with recurrent neural networks. arXiv preprint arXiv:1511.06939.
+Hu, S., Tu, Y., Han, X., He, C., Cui, G., Long, X., Zheng, Z., Fang, Y., Huang, Y., Zhao, W. 
+et al. (2024). Minicpm: Unveiling the potential of small language models with scalable 
+training strategies. arXiv preprint arXiv:2404.06395.
+Huang, T., Dong, Y., Ding, M., Yang, Z., Feng, W., Wang, X., & Tang, J. (2021). Mixgcf: 
+An improved training method for graph neural network-based recommender systems. 
+In Proceedings of the 27th ACM SIGKDD conference on knowledge discovery & data mining 
+(pp. 665–674). 
+Ji, J., Li, Z., Xu, S., Hua, W., Ge, Y., Tan, J., & Zhang, Y. (2024). Genrec: Large language 
+model for generative recommendation. European Conference on Information Retrieval, 
+(pp. 494–502). 
+Jiang, W., Pardos, Z.A., & Wei, Q. (2019). Goal-based course recommendation. In Proceed-
+ings of the 9th international conference on learning analytics & knowledge (pp. 36–45). 
+Jing, X., & Tang, J. (2017). Guess you like: Course recommendation in MOOCs. In Pro-
+ceedings of the international conference on web intelligence (pp. 783–789). 
+Khalid, A., Lundqvist, K., & Yates, A. (2022). A literature review of implemented rec-
+ommendation techniques used in massive open online courses. Expert Systems with 
+Applications, 187, 115926. 
+Khan, M.A.Z., Polyzou, A., & Bennamane, N. (2024). How can we use llms for EDM tasks? 
+The case of course recommendation. In Joint proceedings of the human-centric explainable 
+AI in education and the leveraging large language models for next generation educational 
+technologies workshops (pp. 1–9). (vol. 3840). 
+Kynkäänniemi, T., Karras, T., Laine, S., Lehtinen, J., & Aila, T. (2019). Improved preci-
+sion and recall metric for assessing generative models. Advances in Neural Information 
+Processing Systems, 32, 3162–3172. 
+Li, M., Li, Z., Huang, C., Jiang, Y., & Wu, X. (2024a). Edugraph: Learning path-based 
+hypergraph neural networks for mooc course recommendation. IEEE Transactions on 
+Big Data, 10, 706–719. 
+Li, S., Zhao, Y., Guo, L., Ren, M., Li, J., Zhang, L., & Li, K. (2024b). Quantiﬁcation and 
+prediction of engagement: Applied to personalized course recommendation to reduce 
+dropout in MOOCs. Information Processing & Management, 61(1), 103536. 
+Li, X., Guo, R., Chen, J., Hu, Y., Qu, M., & Jiang, B. (2023). Eﬀective hybrid graph and 
+hypergraph convolution network for collaborative ﬁltering. Neural Computing and Ap-
+plications, 35(3), 2633–2646. 
+Li, X., Yuan, W., Peng, D., Mei, Q., & Wang, Y. (2020). When BERT meets bilbo: A learning 
+curve analysis of pretrained language model on disease classiﬁcation. In 2020 IEEE 
+international conference on healthcare informatics (ICHI) (pp. 1–2). IEEE. 
+Lin, Y., Feng, S., Lin, F., Zeng, W., Liu, Y., & Wu, P. (2021). Adaptive course recommen-
+dation in MOOCs. Knowledge-Based Systems, 224, 107085. 
+Liu, H., Ding, J., Yang, L.T., Guo, Y., Wang, X., & Deng, A. (2019). Multi-dimensional 
+correlative recommendation and adaptive clustering via incremental tensor decom-
+position for sustainable smart education. IEEE Transactions on Sustainable Computing, 
+5(3), 389–402. 
+Lyu, H., Jiang, S., Zeng, H., Xia, Y., Wang, Q., Zhang, S., Chen, R., Leung, C., Tang, J., & 
+Luo, J. (2023). Llm-rec: Personalized recommendation via prompting large language 
+models. arXiv preprint arXiv:2307.15780.
+Ma, B., Khan, M. A.Z., Yang, T., Polyzou, A., & Konomi, S. (2025). How good 
+are large language models for course recommendation in MOOCs? arXiv preprint 
+Neural Networks 193 (2026) 107984 
+11 
+
+
+===== PAGE 12 =====
+Y. Ouyang et al.
+arXiv:2504.08208.
+Markel, J. M., Opferman, S. G., Landay, J. A., & Piech, C. (2023). Gpteach: Interactive ta 
+training with gpt-based students. In Proceedings of the tenth acm conference on learning@ 
+scale (pp. 226–236). 
+Ng, Y.K., & Linn, J. (2017). Crsrecs: A personalized course recommendation system for 
+college students. In 2017 8th International conference on information, intelligence, systems 
+& applications (IISA) (pp. 1–6). IEEE. 
+Obeidat, R., Duwairi, R., & Al-Aiad, A. (2019). A collaborative recommendation system 
+for online courses recommendations. In International conference on deep learning and 
+machine learning in emerging applications (pp. 49–54). 
+Pal Chowdhury, S., Zouhar, V., & Sachan, M. (2024). Autotutor meets large language 
+models: A language model tutor with rich pedagogy and guardrails. In Proceedings of 
+the eleventh ACM conference on learning@ scale (pp. 5–15). 
+Parameswaran, A., Venetis, P., & Garcia-Molina, H. (2011). Recommendation systems with 
+complex constraints: A course recommendation perspective. Transactions on Informa-
+tion Systems, 29(4), 1–33. 
+Pardos, Z.A., & Bhandari, S. (2023). Learning gain diﬀerences between chatGPT and hu-
+man tutor generated algebra hints. arXiv preprint arXiv:2302.06871.
+Pazzani, M., & Billsus, D. (2007). Content-based recommendation systems. In The adaptive 
+web: Methods and strategies of web personalization (pp. 325–341). 
+Phung, T., Cambronero, J., Gulwani, S., Kohn, T., Majumdar, R., Singla, A., & Soares, G. 
+(2023). Generating high-precision feedback for programming syntax errors using large 
+language models. arXiv preprint arXiv:2302.04662.
+Rao, J., & Lin, J. (2024). Ramo: Retrieval-augmented generation for enhancing moocs 
+recommendations. arXiv preprint arXiv:2407.04925.
+Ray, S., & Sharma, A. (2011). A collaborative ﬁltering based approach for recommending 
+elective courses. In Information intelligence, systems, technology and management (pp. 
+330–339). 
+Sabnis, V., Tejaswini, P.D., & Sharvani, G.S. (2018). Course recommendations in moocs: 
+Techniques and evaluation. In 2018 3th International conference on computational sys-
+tems and information technology for sustainable solutions (pp. 59–66). 
+Shen, Z., He, H., & Kang, Z. (2024). Balanced multi-relational graph clustering. In Pro-
+ceedings of the 32nd ACM international conference on multimedia (pp. 4120–4128). 
+Sun, J., Mei, S., Yuan, K., Jiang, Y., & Cao, J. (2024). Prerequisite-enhanced category-
+aware graph neural networks for course recommendation. ACM Transactions on Knowl-
+edge Discovery from Data, 18, 1–21. 
+Symeonidis, P., & Malakoudis, D. (2019). Multi-modal matrix factorization with side in-
+formation for recommending massive open online courses. Expert Systems with Appli-
+cations, 118, 261–271. 
+Van Deventer, H., Mills, M., & Evrard, A. (2024). From interets to insights: An LLM ap-
+proach to course recommendations using natural language queries. arXiv preprint 
+arXiv:2412.19312.
+Wang, H., Zeng, Y., Chen, J., Han, N., & Chen, H. (2023). Interval-enhanced graph trans-
+former solution for session-based recommendation. Expert Systems with Applications, 
+213, 118970. 
+Wang, H., Zeng, Y., Chen, J., Zhao, Z., & Chen, H. (2022a). A spatiotemporal graph neu-
+ral network for session-based recommendation. Expert Systems with Applications, 202, 
+117114. 
+Wang, X., He, X., Wang, M., Feng, F., & Chua, T.S. (2019). Neural graph collaborative 
+ﬁltering. In Proceedings of the 42th international ACM SIGIR conference on research and 
+development in information retrieval (pp. 165–174). 
+Wang, X., Ma, W., Guo, L., Jiang, H., Liu, F., & Xu, C. (2022b). Hgnn: Hyperedge-based 
+graph neural network for mooc course recommendation. Information Processing & Man-
+agement, 59(3), 102938. 
+Xu, W., & Zhou, Y. (2020). Course video recommendation with multimodal information 
+in online learning platforms: A deep learning framework. British Journal of Educational 
+Technology, 51(5), 1734–1747. 
+Yang, S., & Cai, X. (2022). Bilateral knowledge graph enhanced online course recommen-
+dation. Information Systems, 107, 102000. 
+Yigci, D., Eryilmaz, M., Yetisen, A.K., Tasoglu, S., & Ozcan, A. (2025). Large language 
+model-based chatbots in higher education. Advanced Intelligent Systems, 7(3), 2400429.
+Yining, W., Liwei, W., Yuanzhi, L., Di, H., Wei, C., & Tie-Yan, L. (2013). A theoretical anal-
+ysis of ndcg ranking measures. In Proceedings of the 26th annual conference on learning 
+theory (pp. 25–54). (vol. 30). 
+Yu, J., Luo, G., Xiao, T., Zhong, Q., Wang, Y., Feng, W., Luo, J., Wang, C., Hou, L., Li, J. 
+et al. (2020). Mooccube: A large-scale data repository for nlp applications in moocs. 
+In Proceedings of the 58th annual meeting of the association for computational linguistics 
+(pp. 3135–3142). 
+Zhang, C., Hu, X., & Wei, W. (2024). A review of AI-based techniques in online course rec-
+ommendation: Metrics, factors, and research methods. In 2024 International conference 
+on intelligent education and intelligent research (pp. 1–8). IEEE. 
+Zhang, C., Xue, S., Li, J., Wu, J., Du, B., Liu, D., & Chang, J. (2023). Multi-aspect enhanced 
+graph neural networks for recommendation. Neural Networks, 157, 90–102. 
+Zhang, J., Hao, B., Chen, B., Li, C., Chen, H., & Sun, J. (2019). Hierarchical reinforcement 
+learning for course recommendation in MOOCs. In Proceedings of the AAAI conference 
+on artiﬁcial intelligence (pp. 435–442). (vol. 33). 
+Zhang J, S.X., et al. (2018). Gaan: Gated attention networks for learning on large and 
+spatiotemporal graphs. arXiv preprint arXiv:1803.07294.
+Zhao, Y., & Zheng, Y. (2023). Mooc recommendation using heterogeneous graph neural 
+network and attention mechanism. In Proceedings of the 2023 6th international confer-
+ence on artiﬁcial intelligence and pattern recognition (pp. 1376–1381). 
+Zhou, C., Bai, J., Song, J., Liu, X., Zhao, Z., Chen, X., & Gao, J. (2018). Atrank: An attention-
+based user behavior modeling framework for recommendation. In Proceedings of the 
+AAAI conference on artiﬁcial intelligence. (vol. 32). 
+Zhou, T., Ye, H., & Cao, F. (2024). Node-personalized multi-graph convolutional networks 
+for recommendation. Neural Networks, 173, 106169. 
+Neural Networks 193 (2026) 107984 
+12 
