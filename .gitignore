@@ -16,9 +16,16 @@ model/
 dataset/
 artifacts/
 
-# 本地实验工作区（PRISM 参考实现、临时笔记，均不入库）
-PRISM/
+# 复现工作区（代码与文档入库；数据集、特征、checkpoint、论文 PDF 不入库）
 _scratch/
+PRISM/data_local/Beauty/
+PRISM/images/
+PRISM/outputs/
+PRISM/*.pdf
+PRISM/*.docx
+STOSA/outputs/
+STOSA/outputs_smoke/
+STOSA/*.pdf
 
 # IDE / 系统
 .vscode/
