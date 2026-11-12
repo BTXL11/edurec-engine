@@ -36,6 +36,35 @@
 2. **概率式（高斯分布）扩展已实现但不启用**——实测无收益，根因与后续方向见
    `docs/gaussian-recall-status.md`。
 
+## 当前阶段（2026-11）：序列主干 + 多模态 + 知识图谱
+
+上面那套语义双塔的结论说明「纯文本语义」不适合当主路（纯语义弱于纯热门）。
+现阶段的路线换成三段式：
+
+```
+                 ┌── 知识图谱：EMBEDD-ER 移植（src/kg/）→ 300 维课程/概念嵌入
+STOSA（序列主干） ─┤
+   物品 = N(μ,Σ)  └── 多模态：PRISM 复现（封面/关键帧 → CLIP 512d）
+                          │
+                          └─ 不确定性门控融合 → top-N（文件契约不变）
+```
+
+| 模块 | 状态 | 证据 |
+| --- | --- | --- |
+| STOSA（主干） | Amazon Beauty 复现到论文 ~90%（MRR 0.0325 vs 0.0360），优于 SASRec +11.8% | `STOSA/REPRODUCTION_REPORT.md` |
+| PRISM（多模态） | 三 seed 复核：R@10 +5.6%（t=3.92）、N@10 +13.6%（t=7.09） | `PRISM/RUN_LOCAL.md` |
+| EMBEDD-ER（知识图谱） | 425 个概念 / 1027 条先修边 → 300 维嵌入 | `src/kg/`、`docs/handoff-2026-11-09.md` |
+| 融合（原型） | 固定权重融合比纯 ID +7.6%（p=4e−30）；「不确定性越高越该用多模态」只在高离散度用户上成立，STOSA 原生物品协方差做门控为显著负收益 | `docs/fusion-probe.md` |
+
+**复现工作区**：`STOSA/`、`PRISM/` 只提交代码与文档，数据集、CLIP 特征、checkpoint 与论文 PDF
+走 `.gitignore`，重新生成的命令见 `STOSA/UPSTREAM.md`、`PRISM/RUN_LOCAL.md`。
+融合实验在冻结表示上运行，不需要训练：
+
+```bash
+export PYTHONPATH=src
+python -m scripts.run_fusion_probe     # 约 132 s（CPU），写 model/fusion_probe.json
+```
+
 ## 环境与测试
 
 ```bash
