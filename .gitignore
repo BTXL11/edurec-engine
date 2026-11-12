@@ -23,6 +23,7 @@ PRISM/images/
 PRISM/outputs/
 PRISM/*.pdf
 PRISM/*.docx
+!PRISM/汇报8_精简版.docx
 STOSA/outputs/
 STOSA/outputs_smoke/
 STOSA/*.pdf
