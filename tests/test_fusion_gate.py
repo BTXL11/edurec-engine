@@ -179,3 +179,30 @@ def test_interest_dispersion_is_zero_for_a_stable_history():
     mean = np.zeros((6, 8), dtype=np.float64)
     seq = np.array([3, 3, 3, 3], dtype=np.int64)
     assert probe.interest_dispersion(seq, mean, k=5) == pytest.approx(0.0)
+
+
+# ------------------------------------------------------------------ 自适应图文（floor）
+def test_gate_floor_keeps_a_minimum_content_weight():
+    """明确目标的用户也不该把内容信号关掉：权重必须 ≥ floor。"""
+    gate = UncertaintyGate(slope=2.0, intercept=-1.0, floor=0.3)
+    w = gate.weights(np.array([-3.0, 0.0, 3.0]))
+    assert np.all(w >= 0.3 - 1e-12)
+    assert np.all(np.diff(w) > 0)          # 迷茫程度仍然单调决定权重
+    assert w[0] > 0.3                       # 下限之上还留了一点内容
+    assert w[-1] <= 1.0
+
+
+def test_gate_floor_only_shifts_the_sigmoid_range():
+    """floor 只是把 [0,1] 压到 [floor,1]，斜率与截距的含义不变。"""
+    plain = UncertaintyGate(slope=1.5, intercept=0.2, floor=0.0)
+    floored = UncertaintyGate(slope=1.5, intercept=0.2, floor=0.25)
+    unc = np.array([-2.0, -0.5, 0.0, 0.5, 2.0])
+    np.testing.assert_allclose(
+        floored.weights(unc), 0.25 + 0.75 * plain.weights(unc)
+    )
+
+
+def test_gate_default_floor_is_zero_and_serialized():
+    gate = UncertaintyGate(slope=1.0, intercept=0.0)
+    assert gate.floor == 0.0
+    assert gate.as_dict()["floor"] == 0.0

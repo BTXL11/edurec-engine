@@ -15,6 +15,7 @@ env/
 model/
 dataset/
 artifacts/
+data_local/
 
 # 复现工作区（代码与文档入库；数据集、特征、checkpoint、论文 PDF 不入库）
 _scratch/

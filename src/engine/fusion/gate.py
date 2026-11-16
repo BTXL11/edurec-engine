@@ -116,6 +116,10 @@ class UncertaintyGate:
     拟合参数只有两个（标准化尺度上的斜率 ``slope`` 与截距 ``intercept``），
     在几百个验证用户上即可稳定估计，避免小数据下过拟合。
 
+    ``floor`` 是多模态权重下限：即使门控判定「这个用户很明确、该信历史」，
+    内容侧仍保留 ``floor`` 的权重，避免把已有的互补信息一刀切掉。
+    对「自适应图文」而言，floor 回答的是「历史说了算的用户还要不要看课程本身」。
+
     ``fit`` 的标签约定：对每个验证用户，如果纯多模态表示把真实下一件物品
     排得比纯 ID 表示更靠前，记 ``label = 1``。斜率显著为正即说明
     「越不确定的用户越该用多模态」，这正是待验证的假设。
@@ -127,6 +131,7 @@ class UncertaintyGate:
     std_unc: float = 1.0
     n_train: int = 0
     converged: bool = field(default=False)
+    floor: float = 0.0
 
     # ---------------------------------------------------------------- 变换
     def standardize(self, unc: np.ndarray) -> np.ndarray:
@@ -137,8 +142,9 @@ class UncertaintyGate:
         return self.slope * self.standardize(unc) + self.intercept
 
     def weights(self, unc: np.ndarray) -> np.ndarray:
-        """给定不确定性，返回多模态侧权重 g∈[0,1]，形状 ``(n,)``。"""
-        return sigmoid(self.logits(unc))
+        """给定不确定性，返回多模态侧权重 g∈[floor, 1]，形状 ``(n,)``。"""
+        raw = sigmoid(self.logits(unc))
+        return self.floor + (1.0 - self.floor) * raw
 
     # ---------------------------------------------------------------- 拟合
     def fit(
@@ -219,4 +225,5 @@ class UncertaintyGate:
             "std_unc": self.std_unc,
             "n_train": self.n_train,
             "converged": self.converged,
+            "floor": self.floor,
         }
