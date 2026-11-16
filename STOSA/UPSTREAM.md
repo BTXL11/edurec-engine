@@ -40,6 +40,6 @@ python main.py --data_dir=./data/ --model_name=DistSAModel --data_name=Beauty \
 | `outputs/`、`outputs_smoke/` | 每个 checkpoint 6.7 MB | 训练产物，跑一次即可重新生成 |
 | `*.pdf` | 8.8 MB | 论文 PDF，只保留提取出的 `paper_text.txt` 与阅读笔记 |
 
-`data/Beauty.txt`（1.1 MB，22,363 用户 / 12,101 物品）**入库**：
-`src/engine` 里的融合实验（`scripts/run_fusion_probe.py`）默认读它，保证 clone 下来能直接复现。
-`STOSA/outputs/` 下的 checkpoint 也被融合实验当作冻结的物品分布来源，缺失时按上面的命令重训一次即可。
+`data/Beauty.txt`（1.1 MB，22,363 用户 / 12,101 物品）**入库**：`STOSA/main.py`
+默认读它，`python main.py` 可直接开始训练，不用再下载数据。
+`STOSA/outputs/` 下的 checkpoint 是训练产物，按上面的命令重训一次即可。

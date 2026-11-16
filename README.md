@@ -52,7 +52,7 @@ platform 是 Go + Vue 应用；双仓让 PyTorch/数据集与 Web 工具链互�
 STOSA（序列主干） ─┤
    物品 = N(μ,Σ)  └── 多模态：PRISM 复现（封面/关键帧 → CLIP 512d）
                           │
-                          └─ 不确定性门控融合 → top-N（文件契约不变）
+                          └─ 融合线已证伪并撤回（见父目录 失败记录-图文融合-2026-11-16.md）
 ```
 
 | 模块 | 状态 | 证据 |
@@ -60,16 +60,12 @@ STOSA（序列主干） ─┤
 | STOSA（主干） | Amazon Beauty 复现到论文 ~90%（MRR 0.0325 vs 0.0360），优于 SASRec +11.8% | `STOSA/REPRODUCTION_REPORT.md` |
 | PRISM（多模态） | 三 seed 复核：R@10 +5.6%（t=3.92）、N@10 +13.6%（t=7.09） | `PRISM/RUN_LOCAL.md` |
 | EMBEDD-ER（知识图谱） | 425 个概念 / 1027 条先修边 → 300 维嵌入 | `src/kg/`、`docs/handoff-2026-11-09.md` |
-| 融合（原型） | 固定权重融合比纯 ID +7.6%（p=4e−30）；「不确定性越高越该用多模态」只在高离散度用户上成立，STOSA 原生物品协方差做门控为显著负收益 | `docs/fusion-probe.md` |
+| 融合（已证伪） | 四轮实验、六个证伪：1v99 下自适应门控看着有效，全量排序下 HR@10 −0.0708（p=1.7e−143），冷启动 −0.0547 | 父目录 `失败记录-图文融合-2026-11-16.md` |
 
 **复现工作区**：`STOSA/`、`PRISM/` 只提交代码与文档，数据集、CLIP 特征、checkpoint 与论文 PDF
 走 `.gitignore`，重新生成的命令见 `STOSA/UPSTREAM.md`、`PRISM/RUN_LOCAL.md`。
-融合实验在冻结表示上运行，不需要训练：
-
-```bash
-export PYTHONPATH=src
-python -m scripts.run_fusion_probe     # 约 132 s（CPU），写 model/fusion_probe.json
-```
+两者的图文融合尝试（2026-11）已证伪并撤回，结论与数字见父目录
+`失败记录-图文融合-2026-11-16.md`；引擎侧不再保留融合脚本。
 
 ## 环境与测试
 
