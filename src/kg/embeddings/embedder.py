@@ -1,10 +1,10 @@
-from gensim.models import KeyedVectors
 import numpy as np
 import rdflib
 import os
-from gensim.models import KeyedVectors
-from wikipedia2vec import Wikipedia2Vec
 from urllib.parse import unquote
+
+# gensim / wikipedia2vec 只在真正加载词向量时才需要，改为在函数内延迟导入：
+# 概念生成接口只用 decode_concept，不该被 3.86GB 词向量的依赖拖住（本机没装也能用）。
 
 DATA_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "model")
 
@@ -32,6 +32,7 @@ def decode_concept(uri_or_name):
 
 # 原load
 def load_model(path, name = 'wikipedia2vec'):
+    from gensim.models import KeyedVectors
     # dimensions = ["100", "300", "500"]
     print(f"Loading {name} model ...")
     wikipedia2vec = KeyedVectors.load_word2vec_format(path, binary = False)
@@ -62,6 +63,8 @@ class Wikipedia2VecWrapper:
 
 
 def load_model_(path, name='wikipedia2vec'):
+    from gensim.models import KeyedVectors
+    from wikipedia2vec import Wikipedia2Vec
     print(f"Loading {name} model ...")
     pkl_path = path.replace(".txt", ".pkl")
     if os.path.exists(pkl_path):
