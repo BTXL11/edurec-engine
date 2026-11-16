@@ -1,6 +1,6 @@
 """MOOCCube 数据集加载器：把课程/概念/选课记录转成统一 DataBundle。
 
-数据来源（本地旧版 MOOCCube，见 dataset/MOOCCube/MOOCCube/）：
+数据来源（本地旧版 MOOCCube，根目录默认 dataset/MOOCCube/，也兼容解压后的 dataset/MOOCCube/MOOCCube/）：
   entities/course.json          课程（JSONL，一行一门课）：id/name/about/video_order…
   entities/user.json            用户（JSONL）：id/course_order/enroll_time（带时间戳）
   relations/course-concept.json 课程↔概念（TSV）
@@ -86,7 +86,7 @@ def load_id_map(path: str) -> dict[str, dict[str, int]]:
 class MOOCCubeConfig:
     """MOOCCube 加载参数（与 EngineConfig 解耦，便于单测直接构造）。"""
 
-    root: str = "dataset/MOOCCube/MOOCCube"
+    root: str = "dataset/MOOCCube"
     max_users: int = 5000          # 活跃用户抽样上限（0 = 不限）
     min_user_courses: int = 10     # 视为「活跃」的最少选课数（抽样前过滤）
     min_courses_after_sample: int = 0  # 抽样后再过滤一次的最小选课数（0 = 不过滤）
@@ -196,6 +196,11 @@ def _select_users(user_path: str, user_course: dict[str, list[tuple[str, int]]],
 def load(cfg: MOOCCubeConfig) -> DataBundle:
     """加载 MOOCCube → DataBundle（推荐单元为课程）。"""
     root = cfg.root
+    # 兼容 MOOCCube 压缩包解压后多一层目录的情况
+    if not os.path.isfile(os.path.join(root, "entities", "course.json")):
+        nested = os.path.join(root, "MOOCCube")
+        if os.path.isfile(os.path.join(nested, "entities", "course.json")):
+            root = nested
     course_path = os.path.join(root, "entities", "course.json")
     user_path = os.path.join(root, "entities", "user.json")
     if not os.path.isfile(course_path):

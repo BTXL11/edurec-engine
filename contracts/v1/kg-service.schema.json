@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Shionyori/edurec-engine/contracts/v1/kg-service.schema.json",
+  "title": "edurec-engine 知识生成服务（可选在线契约，contract_version = 1）",
+  "description": "独立于「快照进、排名出」主契约。平台只在自动生成概念时调用；engine 未启动只影响该功能。",
+  "type": "object",
+  "$defs": {
+    "concept": {
+      "type": "object",
+      "required": ["name", "page_rank"],
+      "additionalProperties": true,
+      "properties": {
+        "name": {"type": "string", "minLength": 2, "maxLength": 64},
+        "page_rank": {"type": "number", "minimum": 0}
+      }
+    },
+    "generate_request": {
+      "type": "object",
+      "required": ["title"],
+      "additionalProperties": true,
+      "properties": {
+        "title": {"type": "string", "minLength": 1},
+        "description": {"type": "string"},
+        "point_code": {"type": "string"}
+      }
+    },
+    "generate_response": {
+      "type": "object",
+      "required": ["contract_version", "title", "concepts"],
+      "additionalProperties": true,
+      "properties": {
+        "contract_version": {"const": 1},
+        "point_code": {"type": "string"},
+        "title": {"type": "string"},
+        "concepts": {"type": "array", "items": {"$ref": "#/$defs/concept"}},
+        "elapsed_seconds": {"type": "number", "minimum": 0}
+      }
+    },
+    "batch_request": {
+      "type": "object",
+      "required": ["items"],
+      "properties": {
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/generate_request"}
+        }
+      }
+    },
+    "batch_response": {
+      "type": "object",
+      "required": ["contract_version", "results"],
+      "properties": {
+        "contract_version": {"const": 1},
+        "results": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {"$ref": "#/$defs/generate_response"},
+              {
+                "type": "object",
+                "required": ["point_code", "title", "concepts", "error"],
+                "properties": {
+                  "point_code": {"type": "string"},
+                  "title": {"type": "string"},
+                  "concepts": {"type": "array", "maxItems": 0},
+                  "error": {"type": "string"}
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "health_response": {
+      "type": "object",
+      "required": ["status", "engine", "version", "contract_version"],
+      "properties": {
+        "status": {"const": "ok"},
+        "engine": {"const": "edurec-engine"},
+        "version": {"type": "string"},
+        "contract_version": {"const": 1},
+        "capabilities": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "error_response": {
+      "type": "object",
+      "required": ["error"],
+      "properties": {"error": {"type": "string"}}
+    }
+  }
+}

@@ -4,7 +4,7 @@
 加速器用自签根证书中间人代理，Python 校验必然失败，报
 `CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate`）。
 所以这里在 import transformers 之前就把端点兜底到 hf-mirror.com，
-不依赖外部环境变量是否设置 —— 否则在没走 setup_env.ps1 的 Jupyter 内核里必然复现该报错。
+不依赖外部环境变量是否设置 —— 否则在未配置环境变量的 Jupyter 内核里必然复现该报错。
 """
 import os
 

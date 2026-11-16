@@ -7,7 +7,7 @@ import yaml
 @dataclass
 class EngineConfig:
     seed: int = 42
-    data_source: str = "sim"                      # sim | movielens
+    data_source: str = "sim"                      # sim | mooccube | platform
 
     # 模拟器
     sim_n_users: int = 2000
@@ -23,28 +23,8 @@ class EngineConfig:
     train_ratio: float = 0.8
     val_ratio: float = 0.1
 
-    # 召回
-    recall_embed_dim: int = 64
-    recall_batch_size: int = 1024
-    recall_lr: float = 1e-3
-    recall_epochs: int = 10
-    recall_tau: float = 0.05
-    recall_k: int = 50
-
-    # 排序
-    rank_batch_size: int = 256
-    rank_lr: float = 1e-3
-    rank_epochs: int = 5
-    rank_neg_per_pos: int = 3
-    rank_w_ctr: float = 1.0
-    rank_w_cvr: float = 0.5
-    rank_w_rating: float = 0.5
-
-    # 重排
+    # 输出
     top_n: int = 20
-    mmr_lambda: float = 0.5
-    cold_age_days: float = 7.0
-    cold_weight: float = 1.2
 
     # 路径
     data_dir: str = "dataset"
@@ -52,7 +32,7 @@ class EngineConfig:
     snapshot_dir: str = ""   # platform 快照目录（data_source=platform 时使用）
 
     # MOOCCube（data_source=mooccube 时使用）
-    mooccube_dir: str = "dataset/MOOCCube/MOOCCube"
+    mooccube_dir: str = "dataset/MOOCCube"
     mooccube_max_users: int = 5000        # 活跃用户抽样上限（0 = 不限）
     # 视为「活跃」的最少选课数：MOOCCube 用户中位仅 2 门课，阈值 5 时时间序切分后
     # 测试集只剩约 1 门课、监督信号太弱；取 10 时仍有 6,548 人可选。
@@ -110,6 +90,54 @@ class EngineConfig:
     def to_yaml(self, path: str) -> None:
         with open(path, "w", encoding="utf-8") as f:
             yaml.safe_dump(asdict(self), f, allow_unicode=True)
+
+    def validate(self) -> None:
+        """在进入训练/推理前校验配置，把错误暴露在入口而不是计算中途。
+
+        以前这些约束散落在各模块（例如权重和必须为正，否则 `fuse_quality` 在
+        逐用户循环里才抛错；比例非法则在切分后得到空集合）。集中校验后，CLI 参数
+        组合错误、YAML 写错都会在加载数据前失败。
+        """
+        problems: list[str] = []
+
+        if self.data_source not in ("sim", "mooccube", "platform"):
+            problems.append(f"未知 data_source: {self.data_source!r}")
+        if self.data_source == "platform" and not self.snapshot_dir:
+            problems.append("data_source=platform 时必须提供 snapshot_dir")
+
+        if self.top_n <= 0:
+            problems.append("top_n 必须为正")
+        if not (0.0 < self.train_ratio < 1.0):
+            problems.append("train_ratio 必须在 (0, 1) 内")
+        if self.val_ratio < 0 or self.train_ratio + self.val_ratio >= 1.0:
+            problems.append("val_ratio 必须 >= 0 且 train_ratio + val_ratio < 1")
+
+        for name in ("quality_w_semantic", "quality_w_rating", "quality_w_popularity"):
+            if getattr(self, name) < 0:
+                problems.append(f"{name} 不能为负")
+        if (self.quality_w_semantic + self.quality_w_rating
+                + self.quality_w_popularity) <= 0:
+            problems.append("质量融合权重之和必须为正")
+
+        if self.encoder_dim <= 0:
+            problems.append("encoder_dim 必须为正")
+        if self.encoder_kind not in ("local", "sentence_transformer"):
+            problems.append(f"未知 encoder_kind: {self.encoder_kind!r}")
+        if self.tower_kind not in ("deterministic", "gaussian"):
+            problems.append(f"未知 tower_kind: {self.tower_kind!r}")
+        if self.recall_sample_mode not in ("last_prefix", "all_prefixes"):
+            problems.append(f"未知 recall_sample_mode: {self.recall_sample_mode!r}")
+        if self.recall_epochs <= 0:
+            problems.append("recall_epochs 必须为正")
+        if self.recall_batch_size < 2:
+            problems.append("recall_batch_size 至少为 2（in-batch 负样本需要）")
+        if self.eval_n_negatives < 0:
+            problems.append("eval_n_negatives 不能为负")
+        if not self.eval_ks or any(k <= 0 for k in self.eval_ks):
+            problems.append("eval_ks 必须是非空正整数序列")
+
+        if problems:
+            raise ValueError("配置非法：" + "；".join(problems))
 
     def mooccube_config(self):
         """按当前配置构造 MOOCCubeConfig（延迟 import，避免循环依赖）。"""

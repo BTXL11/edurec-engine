@@ -4,7 +4,7 @@
     python -m scripts.run_batch_infer --data-source mooccube
     python -m scripts.run_batch_infer --data-source platform --snapshot-dir <dir>
 
-产出（`docs/platform-contract.md` 方向 B）：
+产出（`docs/contracts/platform-contract.md` 方向 B）：
     model/recommendations.json        主文件，{平台 user_id: [平台 resource_id, …]}
     model/recommendations.meta.json   旁挂信封（分数、模型标识、快照 run_id），可选
 """
@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import time
 
 import numpy as np
@@ -37,7 +38,7 @@ def load_data(cfg: EngineConfig):
         if not cfg.snapshot_dir:
             raise SystemExit("--data-source platform 需要 --snapshot-dir 指定快照目录")
         return load_platform(cfg.snapshot_dir)
-    if cfg.data_source in ("sim", "movielens"):
+    if cfg.data_source == "sim":
         return load_bundle(os.path.join(cfg.data_dir, "sim"))
     raise SystemExit(f"未知的数据源: {cfg.data_source}")
 
@@ -53,6 +54,17 @@ def load_model(cfg: EngineConfig, bundle, checkpoint_path: str):
         raise SystemExit(f"找不到模型文件 {checkpoint_path}，请先运行 "
                          f"`python -m scripts.train_semantic`")
     ckpt = torch.load(checkpoint_path, map_location="cpu")
+
+    # 批量推理当前只实现确定性双塔。高斯塔的学生塔输入多一维（历史长度），
+    # 权重形状不同；如果这里硬套 TwoTowerSemantic，会在 load_state_dict 时报错，
+    # 或者更糟——静默地按缺省历史长度打分。明确拒绝，避免交付错误结果。
+    tower_kind = ckpt.get("tower_kind", "deterministic")
+    if tower_kind != "deterministic":
+        raise SystemExit(
+            f"当前批量推理不支持 tower_kind={tower_kind!r} 的 checkpoint。\n"
+            "高斯双塔（阶段二）已实现并评测，但默认不启用；"
+            "如需推理，请先用 --tower-kind deterministic 重新训练，"
+            "或为 run_batch_infer 补齐高斯塔的批量打分入口。")
 
     item_texts = [resource_text(r) for r in
                   sorted(bundle.resources, key=lambda x: x.resource_id)]
@@ -94,19 +106,35 @@ def load_model(cfg: EngineConfig, bundle, checkpoint_path: str):
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data-source", default="mooccube",
+    # 不设默认值：产物会被 platform 导入，数据源错选会造成「导入成功但推荐没变化」。
+    # 也可用 ENGINE_DATA_SOURCE / ENGINE_SNAPSHOT_DIR。
+    ap.add_argument("--data-source", default=None,
                     choices=["mooccube", "sim", "platform"])
     ap.add_argument("--snapshot-dir", default="")
+    ap.add_argument("--model-dir", default="",
+                    help="模型目录（默认 model/；相对当前工作目录）")
     ap.add_argument("--top-n", type=int, default=None)
+    ap.add_argument("--out-dir", default="",
+                    help="产物目录（默认 model/；相对当前工作目录）")
     ap.add_argument("--no-envelope", action="store_true",
                     help="不写旁挂信封（主文件不受影响）")
     args = ap.parse_args()
 
-    cfg = EngineConfig(data_source=args.data_source)
+    data_source = args.data_source or os.environ.get("ENGINE_DATA_SOURCE")
+    if not data_source:
+        ap.error("必须指定 --data-source（或设置 ENGINE_DATA_SOURCE）")
+    snapshot_dir = args.snapshot_dir or os.environ.get("ENGINE_SNAPSHOT_DIR", "")
+    if snapshot_dir:
+        args.snapshot_dir = snapshot_dir
+
+    cfg = EngineConfig(data_source=data_source)
     if args.snapshot_dir:
         cfg.snapshot_dir = args.snapshot_dir
+    if args.model_dir:
+        cfg.model_dir = args.model_dir
     if args.top_n is not None:
         cfg.top_n = args.top_n
+    cfg.validate()
 
     t0 = time.time()
     bundle = load_data(cfg)
@@ -124,17 +152,20 @@ def main() -> None:
     print(f"[infer] {time.time() - t0:.1f}s  覆盖 {len(result.recommendations)} 用户 "
           f"（其中冷启动 {result.cold_start_users}）")
 
-    out_path = os.path.join(cfg.model_dir, "recommendations.json")
-    envelope_path = os.path.join(cfg.model_dir, "recommendations.meta.json")
+    out_dir = args.out_dir or cfg.model_dir
+    out_path = os.path.join(out_dir, "recommendations.json")
+    envelope_path = os.path.join(out_dir, "recommendations.meta.json")
+    now = int(time.time())
     envelope = {
         "contract_version": 1,
-        "generated_at": int(time.time()),
+        "generated_at": now,
+        "run_id": time.strftime("%Y%m%d_%H%M%S", time.localtime(now)),
         "model": {"name": ckpt.get("model_name", "semantic_two_tower"),
-                  "version": "v1"},
+                  "version": "v1",
+                  "encoder": encoder.version},
         "method": {"recall": "semantic_two_tower",
                    "rank": "quality_fusion",
                    "rerank": "seen_filter + top_n"},
-        "encoder": encoder.version,
         "top_n": cfg.top_n,
         "users_count": len(result.recommendations),
         "cold_start_users": result.cold_start_users,
@@ -150,15 +181,19 @@ def main() -> None:
                   None if args.no_envelope else envelope_path,
                   envelope)
 
-    # 出口自检：契约的几条硬约束在这里当场核对，避免把坏文件交给 platform
-    with open(out_path, encoding="utf-8") as f:
-        raw = f.read()
-    payload = json.loads(raw)
-    assert not raw.startswith("\ufeff"), "主文件带了 BOM"
-    assert all(k.isdigit() for k in payload), "存在非数字键"
-    assert all(isinstance(v, list) and all(isinstance(x, int)
-                                          for x in v) for v in payload.values()), \
-        "值必须是整数数组"
+    # 出口自检：直接跑 contracts/v1 校验器（不用 assert，-O 下也不会消失）。
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+    from contracts.v1.validate import validate_recommendations
+    errors = validate_recommendations(out_path)
+    if errors:
+        for err in errors[:20]:
+            print(f"[check] 违规: {err}", file=sys.stderr)
+        raise SystemExit(
+            "推荐主文件不符合 contracts/v1，已拒绝交付（文件保留供排查）")
+
+    payload = json.loads(open(out_path, encoding="utf-8").read())
     n_empty = sum(1 for v in payload.values() if not v)
     print(f"[out] {out_path}")
     if not args.no_envelope:

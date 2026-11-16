@@ -1,11 +1,32 @@
 from __future__ import annotations
 import csv
+import hashlib
 import json
 import os
 from .schema import DataBundle, User, Resource, Behavior, Rating
 
 SNAPSHOT_VERSION = 1
 _REQUIRED = ("users.csv", "resources.csv", "behaviors.csv", "ratings.csv")
+
+
+def _sha256(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 16), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _verify_checksums(snapshot_dir: str, files: dict) -> None:
+    """契约要求：加载前比对 meta.json 的 files_sha256，挡住拷贝中断。"""
+    for name, expected in files.items():
+        path = os.path.join(snapshot_dir, name)
+        if not os.path.isfile(path):
+            raise ValueError(f"快照声明了 {name} 但文件不存在 @ {snapshot_dir}")
+        actual = _sha256(path)
+        if isinstance(expected, str) and actual != expected:
+            raise ValueError(
+                f"快照文件校验和不匹配: {name}（meta={expected[:12]}…, 实际={actual[:12]}…）")
 
 
 def load(snapshot_dir: str) -> DataBundle:
@@ -15,9 +36,11 @@ def load(snapshot_dir: str) -> DataBundle:
     资源多余列（title/view_count/avg_rating/created_at…）保留到 metadata，
     供后续特征扩展使用。契约校验失败抛 ValueError。
 
-    `description`（资源正文）是**可选列**：当前 contract_version=1 的快照不含它，
-    缺失时降级为空串而不报错——语义模型所需正文由 platform 侧补导，
-    详见 docs/platform-contract.md「方向 A · resources.csv」。
+    `description`（资源正文）是**可选列**：缺失时降级为空串而不报错。
+    platform 的 `export_snapshot` 已导出该列（contract_version=1 的扩展列），
+    详见 docs/contracts/platform-contract.md「方向 A · resources.csv」。
+
+    `meta.json` 存在且带 `files_sha256` 时，加载前会逐个比对校验和。
     """
     missing = [f for f in _REQUIRED if not os.path.isfile(os.path.join(snapshot_dir, f))]
     if missing:
@@ -30,6 +53,9 @@ def load(snapshot_dir: str) -> DataBundle:
         if meta.get("contract_version") != SNAPSHOT_VERSION:
             raise ValueError(
                 f"快照契约版本不匹配: {meta.get('contract_version')} != {SNAPSHOT_VERSION}")
+        checksums = meta.get("files_sha256")
+        if isinstance(checksums, dict) and checksums:
+            _verify_checksums(snapshot_dir, checksums)
 
     def _rows(name: str):
         with open(os.path.join(snapshot_dir, name), encoding="utf-8") as f:

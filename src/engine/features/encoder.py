@@ -18,9 +18,15 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 from abc import ABC, abstractmethod
 
 import numpy as np
+
+# 文本构造的**唯一实现**在数据层（schema.resource_text）。这里重新导出，
+# 保持 `from engine.features.encoder import resource_text` 的既有用法可用，
+# 同时避免「数据层反向 import features」的依赖倒置。
+from ..data.schema import resource_text
 
 # 维度对齐 all-MiniLM-L6-v2，方便日后与真 transformer 直接替换对比
 DEFAULT_DIM = 384
@@ -51,6 +57,8 @@ class Encoder(ABC):
     dim: int | None = None
     #: 是否需要先「拟合」语料（TF-IDF/SVD 需要，预训练模型不需要）
     requires_fit: bool = False
+    #: 拟合语料的指纹（统计型编码器才有）；缓存据此判断语料是否换过
+    corpus_fingerprint: str = ""
 
     def __init__(self, normalize: bool = True):
         self.normalize = normalize
@@ -220,9 +228,18 @@ class SentenceTransformerEncoder(Encoder):
 class CachedEncoder(Encoder):
     """编码缓存装饰器：key = 文本 hash，value = 向量，整体存成一个 .npz。
 
-    缓存文件名内含 `encoder.version`，因此换实现、换维度、换 n-gram 都会自动失效，
-    不需要手工清缓存。命中时直接返回磁盘上的向量，保证同一文本跨进程一致。
+    失效规则由缓存元数据（写入 npz 的 `__version__` / `__corpus__`）判断：
+
+      * 实现/超参变化（版本前缀不同）→ 整份丢弃；
+      * 语料指纹变化 → 整份丢弃（IDF 权重变了，同一文本的向量也会变）；
+      * 内部编码器尚未 `fit`（拿不到当前语料指纹）→ 沿用缓存，保持原有无网络场景的用法。
+
+    只靠文件名区分是不够的：缓存路径在 `build_encoder` 时由「未拟合」的 version 生成，
+    语料指纹要等 `fit` 后才知道；因此必须把指纹写进缓存本身，并在加载时比对。
     """
+
+    _META_VERSION = "__version__"
+    _META_CORPUS = "__corpus__"
 
     def __init__(self, inner: Encoder, cache_path: str, max_entries: int = 2_000_000):
         super().__init__(normalize=inner.normalize)
@@ -232,10 +249,32 @@ class CachedEncoder(Encoder):
         self.version = f"cached({inner.version})"
         self.dim = inner.dim
         self.requires_fit = inner.requires_fit
+        self.corpus_fingerprint = getattr(inner, "corpus_fingerprint", "")
         self._store: dict[str, np.ndarray] = {}
         self._loaded = False
 
     # --- 缓存读写 ---
+
+    @staticmethod
+    def _base_version(version: str) -> str:
+        """去掉语料指纹后的版本前缀；用于判断实现/超参是否换了。
+
+        版本形如 `cached(local-hashidf/.../seed=42/corpus=abcd)`；语料段在右括号
+        之前，因此不能用简单的 `split` 后比较（会留下括号差异）。
+        """
+        return re.sub(r"/corpus=[^)]*", "", version)
+
+    def _compatible(self, stored_version: str, stored_corpus: str) -> bool:
+        if not stored_version:
+            return False                  # 旧缓存没有元数据：无法确认，安全起见重建
+        if self._base_version(stored_version) != self._base_version(self.version):
+            return False
+        current = getattr(self.inner, "corpus_fingerprint", "")
+        # 当前内部编码器还没 fit（current 为空）时不做语料判断，保留缓存复用能力；
+        # 一旦 fit 过，指纹不一致就必须失效。
+        if current and stored_corpus and current != stored_corpus:
+            return False
+        return True
 
     def _load(self) -> None:
         if self._loaded:
@@ -245,7 +284,16 @@ class CachedEncoder(Encoder):
             return
         try:
             with np.load(self.cache_path, allow_pickle=False) as data:
-                self._store = {k: data[k] for k in data.files}
+                files = set(data.files)
+                stored_version = (str(data[self._META_VERSION][()])
+                                  if self._META_VERSION in files else "")
+                stored_corpus = (str(data[self._META_CORPUS][()])
+                                 if self._META_CORPUS in files else "")
+                if not self._compatible(stored_version, stored_corpus):
+                    self._store = {}
+                    return
+                self._store = {k: data[k] for k in data.files
+                               if k not in (self._META_VERSION, self._META_CORPUS)}
         except Exception:                 # 缓存损坏时静默重建，不影响正确性
             self._store = {}
 
@@ -254,9 +302,13 @@ class CachedEncoder(Encoder):
         if parent:
             os.makedirs(parent, exist_ok=True)
         tmp = self.cache_path + ".tmp"
+        payload = dict(self._store)
+        payload[self._META_VERSION] = np.array(self.version)
+        payload[self._META_CORPUS] = np.array(
+            getattr(self.inner, "corpus_fingerprint", ""))
         # 用文件句柄写：np.savez(str) 会自动补 .npz 后缀，导致后续 replace 找不到文件
         with open(tmp, "wb") as f:
-            np.savez(f, **self._store)
+            np.savez(f, **payload)
         os.replace(tmp, self.cache_path)     # 原子替换，避免读到写了一半的缓存
 
     # --- 转发 ---
@@ -268,6 +320,14 @@ class CachedEncoder(Encoder):
     def fit(self, corpus: list[str]) -> "CachedEncoder":
         self.inner.fit(corpus)
         self.dim = self.inner.dim
+        # 拟合后语料指纹才确定：同步版本，使 checkpoint 里的 encoder_version
+        # 能反映「这份权重是基于哪份语料学的」。
+        self.version = f"cached({self.inner.version})"
+        self.corpus_fingerprint = getattr(self.inner, "corpus_fingerprint", "")
+        # 已加载/已写入的缓存可能来自旧语料；清空内存副本，下一次 encode 时
+        # 从磁盘重新校验元数据（同一语料则原样复用，不同则重建）。
+        self._store = {}
+        self._loaded = False
         return self
 
     def encode(self, texts: list[str]) -> np.ndarray:
@@ -331,21 +391,6 @@ def build_encoder(config) -> Encoder:
 
 
 # --- 文本构造：统一「资源文本」与「学生需求文本」的口径 ---
-
-def resource_text(resource) -> str:
-    """资源文本 = 标题 + 正文（对齐 CourseHub 的 title + description）。
-
-    有些数据源（如 MOOCCube loader）已经把标题并进 `description`，此时不再重复拼接，
-    否则会得到「线性代数。线性代数。矩阵…」这种重复文本，污染编码输入。
-    """
-    title = (resource.metadata or {}).get("title") or ""
-    body = getattr(resource, "description", "") or ""
-    if not body:
-        return title
-    if not title or body.startswith(title):
-        return body
-    return f"{title}。{body}"
-
 
 def resource_texts(bundle) -> list[tuple[int, str]]:
     """(resource_id, 文本) 列表，按 resource_id 升序，保证与向量行号可对齐。"""

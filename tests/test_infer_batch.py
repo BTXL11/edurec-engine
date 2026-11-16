@@ -1,6 +1,6 @@
 """批量推理与交接契约的测试。
 
-重点钉住 `docs/platform-contract.md` 的硬约束——这些约束一旦破了，
+重点钉住 `docs/contracts/platform-contract.md` 的硬约束——这些约束一旦破了，
 platform 侧会整份导入失败（HTTP 500），因此必须有测试守住。
 """
 
@@ -14,7 +14,7 @@ from engine.data.schema import User, Resource, Behavior, Rating, DataBundle
 from engine.features.encoder import LocalTfidfSvdEncoder
 from engine.models.recall.trainer import build_interactions, train_two_tower
 from engine.pipeline.infer_batch import (
-    BatchResult, Recommendation, infer_batch, write_handoff,
+    BatchResult, Recommendation, _fuse_user_scores, infer_batch, write_handoff,
 )
 from engine.pipeline.recall_pipeline import split_user_interactions
 
@@ -157,6 +157,23 @@ def test_infer_uses_ratings_when_available():
     model, enc, bundle, item_ids, split, cfg = _trained(cfg, bundle)
     result = infer_batch(model, enc, bundle, cfg, item_ids=item_ids)
     assert all(len(r.item_ids) <= cfg.top_n for r in result.recommendations.values())
+
+
+def test_fuse_user_scores_divides_weights_once():
+    """回归：权重和不为 1 时，质量信号不能被除两次。
+
+    旧实现先 `fuse_quality(semantic=0)` 得到已除过 total 的质量分，再在逐用户
+    融合时又除一次 total；默认 (0.6/0/0.4) 恰好抵消，所以测试一直没发现。
+    """
+    cfg = _cfg(quality_w_semantic=2.0, quality_w_rating=0.0,
+               quality_w_popularity=1.0)
+    fused = _fuse_user_scores(
+        semantic_norm=np.array([1.0, 0.0]),
+        rating_norm=np.array([0.0, 0.0]),
+        popularity_norm=np.array([0.0, 1.0]),
+        config=cfg,
+    )
+    assert np.allclose(fused, [2.0 / 3.0, 1.0 / 3.0])
 
 
 def test_infer_handles_bundle_without_behaviors():

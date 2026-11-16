@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Shionyori/edurec-engine/contracts/v1/snapshot.schema.json",
+  "title": "platform → engine 数据快照 meta.json（contract_version = 1）",
+  "type": "object",
+  "required": [
+    "contract_version",
+    "run_id",
+    "exported_at",
+    "behavior_window",
+    "users_count",
+    "resources_count",
+    "behaviors_count",
+    "ratings_count",
+    "categories_count",
+    "files_sha256"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "contract_version": {
+      "const": 1,
+      "description": "不认识的版本 engine 必须明确报错退出"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9]{8}_[0-9]{6}$",
+      "description": "导出时刻的本地时间，YYYYMMDD_HHMMSS"
+    },
+    "exported_at": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Unix 秒"
+    },
+    "behavior_window": {
+      "type": "object",
+      "required": ["start", "end"],
+      "additionalProperties": false,
+      "properties": {
+        "start": {"type": "integer", "minimum": 0},
+        "end": {"type": "integer", "minimum": 0}
+      }
+    },
+    "users_count": {"type": "integer", "minimum": 0},
+    "resources_count": {"type": "integer", "minimum": 0},
+    "behaviors_count": {"type": "integer", "minimum": 0},
+    "ratings_count": {"type": "integer", "minimum": 0},
+    "categories_count": {"type": "integer", "minimum": 0},
+    "files_sha256": {
+      "type": "object",
+      "required": ["users.csv", "resources.csv", "behaviors.csv", "ratings.csv"],
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "description": "键为快照目录内的文件名，值为小写十六进制 SHA-256"
+    }
+  }
+}

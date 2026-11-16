@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..features.encoder import resource_text
+from ..data.access import BundleAccess
 from ..models.recall.trainer import (
     PREFIX_SEP, Interaction, prepare_item_matrix, score_users,
 )
@@ -81,9 +81,8 @@ def evaluate_ranking(model, encoder, bundle, split: UserSequenceSplit,
 
     指标按 CourseHub 的口径：MRR / HitRate@K / NDCG@K，另加 Recall@K。
     """
-    item_texts = [next((resource_text(r) for r in bundle.resources
-                        if r.resource_id == i), "") for i in item_ids]
-    prepare_item_matrix(model, encoder, item_texts)
+    access = BundleAccess(bundle)
+    prepare_item_matrix(model, encoder, access.item_texts(item_ids))
 
     target_split = split.val if use_val else split.test
     index_of = {item: i for i, item in enumerate(item_ids)}
@@ -139,8 +138,10 @@ def popularity_baseline(split: UserSequenceSplit, item_ids: list[int],
 
     counts = Counter(it.item for acts in split.train.values() for it in acts)
     order = [i for i, _ in counts.most_common()]
-    order += [i for i in item_ids if i not in set(order)]
-    ranked = [item_ids.index(i) for i in order]
+    known = set(order)
+    order += [i for i in item_ids if i not in known]
+    index_of = {item: i for i, item in enumerate(item_ids)}
+    ranked = [index_of[i] for i in order]
 
     relevant_of: dict[int, set[int]] = {}
     ranked_of: dict[int, list[int]] = {}
@@ -245,9 +246,8 @@ def evaluate_sampled(model, encoder, bundle, split: UserSequenceSplit,
     随机排序的期望 HitRate@K ≈ K / |候选|，因此报告里同时给出随机基线。
     `history_tail > 0` 时只把最近 N 条历史用于构造需求（历史稀疏场景）。
     """
-    item_texts = [next((resource_text(r) for r in bundle.resources
-                        if r.resource_id == i), "") for i in item_ids]
-    prepare_item_matrix(model, encoder, item_texts)
+    access = BundleAccess(bundle)
+    prepare_item_matrix(model, encoder, access.item_texts(item_ids))
     frames = _sampled_frames(split, item_ids, config, n_negatives, seed, use_val,
                              history_tail)
     if not frames:
@@ -292,8 +292,7 @@ def evaluate_text_similarity_sampled(encoder, bundle, split: UserSequenceSplit,
     若训练后的双塔打不过它，说明可学习的投影没有带来额外收益，
     方案就该退回到 CourseHub 那种「编码即表示」的形态。
     """
-    item_texts = [next((resource_text(r) for r in bundle.resources
-                        if r.resource_id == i), "") for i in item_ids]
+    item_texts = BundleAccess(bundle).item_texts(item_ids)
     encoder.fit(item_texts)
     item_mat = encoder.encode(item_texts)                       # (n_items, D)
     frames = _sampled_frames(split, item_ids, config, n_negatives, seed, use_val,

@@ -40,3 +40,21 @@ class DataBundle:
     resources: list[Resource]
     behaviors: list[Behavior]
     ratings: list[Rating]
+
+
+def resource_text(resource: Resource) -> str:
+    """资源文本 = 标题 + 正文（对齐 CourseHub 的 title + description）。
+
+    文本构造属于「数据 → 模型」的入口口径，因此放在数据层，供 features / models /
+    pipeline 共用，避免数据层反向依赖 features（原实现放在 encoder.py 里）。
+
+    有些数据源（如 MOOCCube loader）已经把标题并进 `description`，此时不再重复拼接，
+    否则会得到「线性代数。线性代数。矩阵…」这种重复文本，污染编码输入。
+    """
+    title = (resource.metadata or {}).get("title") or ""
+    body = getattr(resource, "description", "") or ""
+    if not body:
+        return title
+    if not title or body.startswith(title):
+        return body
+    return f"{title}。{body}"

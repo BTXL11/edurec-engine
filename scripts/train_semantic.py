@@ -41,16 +41,19 @@ def load_data(cfg: EngineConfig):
         if not cfg.snapshot_dir:
             raise SystemExit("--data-source platform 需要 --snapshot-dir 指定快照目录")
         return load_platform(cfg.snapshot_dir)
-    if cfg.data_source in ("sim", "movielens"):
+    if cfg.data_source == "sim":
         return load_bundle(os.path.join(cfg.data_dir, "sim"))
     raise SystemExit(f"未知的数据源: {cfg.data_source}")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data-source", default="mooccube",
+    # 不设默认值：数据源错选会造成白跑或错误交付；也可用 ENGINE_DATA_SOURCE。
+    ap.add_argument("--data-source", default=None,
                     choices=["mooccube", "sim", "platform"])
     ap.add_argument("--snapshot-dir", default="")
+    ap.add_argument("--model-dir", default="",
+                    help="模型目录（默认 model/；相对当前工作目录）")
     ap.add_argument("--epochs", type=int, default=None)
     ap.add_argument("--tower-kind", default=None,
                     choices=["deterministic", "gaussian"],
@@ -65,9 +68,18 @@ def main() -> None:
                     help="跳过纯文本相似度与热门基线（省时间）")
     args = ap.parse_args()
 
-    cfg = EngineConfig(data_source=args.data_source)
+    data_source = args.data_source or os.environ.get("ENGINE_DATA_SOURCE")
+    if not data_source:
+        ap.error("必须指定 --data-source（或设置 ENGINE_DATA_SOURCE）")
+    snapshot_dir = args.snapshot_dir or os.environ.get("ENGINE_SNAPSHOT_DIR", "")
+    if snapshot_dir:
+        args.snapshot_dir = snapshot_dir
+
+    cfg = EngineConfig(data_source=data_source)
     if args.snapshot_dir:
         cfg.snapshot_dir = args.snapshot_dir
+    if args.model_dir:
+        cfg.model_dir = args.model_dir
     if args.epochs is not None:
         cfg.recall_epochs = args.epochs
     if args.tower_kind is not None:
@@ -76,6 +88,7 @@ def main() -> None:
         cfg.recall_sample_mode = args.sample_mode
     if args.negatives is not None:
         cfg.eval_n_negatives = args.negatives
+    cfg.validate()
 
     torch.manual_seed(cfg.seed)
     np.random.seed(cfg.seed)

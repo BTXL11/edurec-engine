@@ -1,0 +1,54 @@
+{
+  "contract_version": 1,
+  "description": "platform → engine 快照 CSV 列定义。required=true 的列缺失时 engine 必须报错退出；可选列缺失时降级处理。",
+  "files": {
+    "users.csv": {
+      "required": true,
+      "columns": [
+        {"name": "user_id", "required": true, "type": "uint", "description": "平台 users.id；文件只含 ID，不含任何个人信息"}
+      ]
+    },
+    "resources.csv": {
+      "required": true,
+      "columns": [
+        {"name": "resource_id", "required": true, "type": "uint"},
+        {"name": "title", "required": true, "type": "string"},
+        {"name": "type", "required": true, "type_hint": "course|article|video", "type": "string"},
+        {"name": "category_id", "required": true, "type": "uint"},
+        {"name": "tags_json", "required": true, "type": "json_array", "description": "JSON 文本，空为 []"},
+        {"name": "metadata_json", "required": true, "type": "json_object", "description": "JSON 文本，空为 {}"},
+        {"name": "avg_rating", "required": true, "type": "decimal2", "description": "固定两位小数，如 4.50"},
+        {"name": "view_count", "required": true, "type": "uint"},
+        {"name": "created_at", "required": true, "type": "unix_seconds"},
+        {"name": "description", "required": false, "type": "string", "description": "资源正文；缺失时降级为空串，但语义模型基本失效"},
+        {"name": "difficulty", "required": false, "type": "string", "type_hint": "beginner|intermediate|advanced|", "description": "空串表示未知"},
+        {"name": "duration_minutes", "required": false, "type": "uint", "description": "0 表示未知"}
+      ]
+    },
+    "behaviors.csv": {
+      "required": true,
+      "columns": [
+        {"name": "user_id", "required": true, "type": "uint"},
+        {"name": "resource_id", "required": true, "type": "uint"},
+        {"name": "action", "required": true, "type": "string", "type_hint": "view|click|favorite"},
+        {"name": "ts", "required": true, "type": "unix_seconds"}
+      ]
+    },
+    "ratings.csv": {
+      "required": true,
+      "columns": [
+        {"name": "user_id", "required": true, "type": "uint"},
+        {"name": "resource_id", "required": true, "type": "uint"},
+        {"name": "score", "required": true, "type": "uint", "minimum": 1, "maximum": 5},
+        {"name": "ts", "required": true, "type": "unix_seconds"}
+      ]
+    },
+    "categories.csv": {
+      "required": false,
+      "columns": [
+        {"name": "category_id", "required": true, "type": "uint"},
+        {"name": "name", "required": true, "type": "string"}
+      ]
+    }
+  }
+}

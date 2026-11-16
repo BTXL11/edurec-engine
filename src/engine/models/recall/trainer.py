@@ -22,7 +22,8 @@ from dataclasses import dataclass, field
 import numpy as np
 import torch
 
-from ...features.encoder import Encoder, resource_text
+from ...data.access import BundleAccess
+from ...features.encoder import Encoder
 from .gaussian import GaussianTwoTower
 from .semantic import TwoTowerSemantic, fuse_quality, normalize_minmax, rank_percentile
 
@@ -58,9 +59,9 @@ def build_interactions(bundle) -> list[Interaction]:
     文本只取自资源的标题+正文——**不含用户侧信息**，因此不同用户对同一资源得到同一文本，
     资源编码可以全局缓存复用。
     """
-    text_of = {r.resource_id: resource_text(r) for r in bundle.resources}
+    access = BundleAccess(bundle)
     return [Interaction(user=b.user_id, item=b.resource_id, ts=b.ts,
-                        text=text_of.get(b.resource_id, ""))
+                        text=access.text(b.resource_id))
             for b in bundle.behaviors]
 
 

@@ -11,10 +11,10 @@ import os
 import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-KG_DIR = os.path.join(REPO_ROOT, "src", "kg")
-sys.path.insert(0, KG_DIR)
+SRC_DIR = os.path.join(REPO_ROOT, "src")
+sys.path.insert(0, SRC_DIR)
 
-from server import main  # noqa: E402
+from kg.server import main  # noqa: E402
 
 
 if __name__ == "__main__":

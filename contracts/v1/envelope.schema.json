@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Shionyori/edurec-engine/contracts/v1/envelope.schema.json",
+  "title": "engine → platform 推荐旁挂信封（recommendations.meta.json）",
+  "description": "可选文件。缺失、为空、字段不全都不得影响平台导入；平台存而不解释。",
+  "type": "object",
+  "required": ["contract_version"],
+  "additionalProperties": true,
+  "properties": {
+    "contract_version": {"const": 1},
+    "generated_at": {"type": "integer", "minimum": 0, "description": "本次推理完成时刻，Unix 秒"},
+    "run_id": {"type": "string", "description": "本次推理的标识"},
+    "snapshot_run_id": {"type": "string", "description": "所用快照的 run_id"},
+    "model": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "name": {"type": "string"},
+        "version": {"type": "string"},
+        "encoder": {"type": "string"}
+      }
+    },
+    "method": {
+      "type": "object",
+      "additionalProperties": {"type": "string"}
+    },
+    "top_n": {"type": "integer", "minimum": 0},
+    "users_count": {"type": "integer", "minimum": 0},
+    "quality_weights": {
+      "type": "object",
+      "additionalProperties": {"type": "number"}
+    },
+    "scores": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[0-9]+$"},
+      "additionalProperties": {
+        "type": "array",
+        "items": {"type": "number"}
+      },
+      "description": "每用户分数，顺序与主文件数组一一对应"
+    },
+    "reasons": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[0-9]+$"},
+      "additionalProperties": {
+        "type": "array",
+        "items": {"type": "string"}
+      },
+      "description": "可读解释文案，位置与主文件一一对应"
+    }
+  }
+}

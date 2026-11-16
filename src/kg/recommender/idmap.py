@@ -8,9 +8,8 @@ import os
 import re
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from recommender.stats import load_courses  # noqa: E402
+from kg.recommender.stats import load_courses  # noqa: E402
 
 _ILLEGAL = r'[\\/:*?"<>|]'
 

@@ -2,8 +2,14 @@
 
 教育资源推荐模型引擎（独立仓库），作为 edurec-platform 的离线模型服务。
 
-**一期交付：离线训练 + 批量推理。** 产出推荐结果文件，由 platform 导入其 `recommendations`
-缓存表。两仓库之间只有文件交接，不共享数据库与代码。
+**交付形态：离线训练 + 批量推理。** engine 消费平台导出的数据快照，产出推荐结果文件，
+由 platform 导入其 `recommendations` 缓存表。两仓库之间只有文件交接，不共享数据库与代码；
+唯一的可选在线能力是知识生成 HTTP 服务（见下文），不参与推荐主链路。
+
+**为什么保持独立仓库**：engine 是可独立引用/复现的模型工件（含 `CITATION.cff`），
+platform 是 Go + Vue 应用；双仓让 PyTorch/数据集与 Web 工具链互不污染，边界由
+[`contracts/v1`](contracts/v1/README.md) 固化。若未来「一次功能改动需同时改两仓」
+的频率达到每周 ≥1 次，再评估 monorepo（决策见 platform 的 `docs/design/model-design.md` #37）。
 
 ## 模型
 
@@ -18,7 +24,8 @@
                                                      冷启动 ─► 热门兜底 ─────┘
 ```
 
-设计文档见 `docs/design.md`。核心实测结论：
+设计文档见 [`docs/design/model-design.md`](docs/design/model-design.md)，当前数据流见 [`docs/contracts/data-flow.md`](docs/contracts/data-flow.md)。
+核心实测结论（MOOCCube，5000 活跃用户 / 706 门课，1 vs 99 采样协议）：
 
 | 方法 | HitRate@5 | HitRate@10 | NDCG@10 | MRR |
 |---|---|---|---|---|
@@ -28,13 +35,12 @@
 | **语义 + 热度融合（默认配置）** | **0.4108** | **0.5758** | **0.2534** | **0.2791** |
 | 随机 | 0.0495 | 0.0990 | – | – |
 
-（MOOCCube，5000 活跃用户 / 706 门课，1 vs 99 采样候选协议）
-
 **两点必须知道**：
-1. **纯语义单独用弱于纯热门**；融合后才超过热门 17%。权重是按本数据集实测定的
+
+1. **纯语义单独用弱于纯热门**；融合后才超过热门。权重是本数据集实测定的
    （`0.6 / 0.0 / 0.4`），**不是**论文的 `0.7 / 0.2 / 0.1`。
 2. **概率式（高斯分布）扩展已实现但不启用**——实测无收益，根因与后续方向见
-   `docs/gaussian-recall-status.md`。
+   [`docs/design/gaussian-recall-status.md`](docs/design/gaussian-recall-status.md)。
 
 ## 当前阶段（2026-11）：序列主干 + 多模态 + 知识图谱
 
@@ -68,37 +74,42 @@ python -m scripts.run_fusion_probe     # 约 132 s（CPU），写 model/fusion_p
 ## 环境与测试
 
 ```bash
-pip install -e .[dev]
-python -m pytest tests
+python -m venv .venv && . .venv/bin/activate
+pip install -e .[dev]          # 推荐引擎 + 测试
+pip install -e .[dev,kg]       # 另装知识生成服务的最小依赖（rdflib/sklearn）
+python -m pytest
 ```
 
-## 使用
-
-### 数据源
+## 数据源
 
 | 数据源 | 命令 | 说明 |
 |---|---|---|
-| `mooccube` | 数据已在 `dataset/MOOCCube/` | 真实教育域数据，**推荐用这个验证** |
+| `mooccube` | 数据放在 `dataset/MOOCCube/` | 真实教育域数据，**推荐用它验证模型**；数据集需自行下载（不入库） |
 | `sim` | `python -m scripts.gen_sim_data` | 模拟数据，打通流水线与回归测试 |
-| `platform` | 手动拷入 `dataset/platform_snapshot/<run_id>/` | 平台真实快照，见 `docs/platform-contract.md` |
+| `platform` | 由 platform 的 `export_snapshot` 产出，拷入 `dataset/platform_snapshot/<run_id>/` | 平台真实快照，见 [`docs/contracts/platform-contract.md`](docs/contracts/platform-contract.md) |
 
-> ⚠️ `platform` 数据源上语义模型**目前基本失效**：快照未导出资源正文
-> （`resources.description`）。补导请求见 `docs/platform-description-request.md`。
+> `dataset/`、`model/` 都不入库。`mooccube` 数据缺失时命令会明确报错，不会静默降级。
 
-### 训练
+## 训练
 
 ```bash
 python -m scripts.train_semantic --data-source mooccube
 python -m scripts.train_semantic --data-source mooccube --sparse-tail 2   # 加跑历史稀疏场景
 ```
 
-产出 `model/semantic_recall.pt`（模型 + 编码器版本 + 语料指纹）与
-`model/metrics_semantic.json`（含三条对照基线）。
+产出：
 
-### 批量推理
+- `model/semantic_recall.pt`：模型 + 编码器版本 + 语料指纹 + `item_ids`
+- `model/metrics_semantic.json`：本次指标（含纯文本 / 热门两条对照基线）
+
+`--data-source` **必填**，避免拿错轨道训练。
+
+## 批量推理
 
 ```bash
-python -m scripts.run_batch_infer --data-source mooccube
+python -m scripts.run_batch_infer \
+  --data-source mooccube \
+  --out-dir model
 ```
 
 产出：
@@ -106,69 +117,96 @@ python -m scripts.run_batch_infer --data-source mooccube
 | 文件 | 内容 |
 |---|---|
 | `model/recommendations.json` | 主文件：`{平台 user_id: [平台 resource_id, …]}`，按相关性降序、已去重、覆盖全量用户 |
-| `model/recommendations.meta.json` | 旁挂信封：分数、模型标识、质量权重、快照 run_id（可选） |
+| `model/recommendations.meta.json` | 旁挂信封：分数、模型标识、`run_id`、快照 `run_id`、质量权重 |
 
-主文件格式受契约约束（[`docs/platform-contract.md`](docs/platform-contract.md)）：
-顶层不得有任何非整数数组字段、无 BOM、**先写临时文件再原子重命名**。
-推理前会校验编码器版本与**资源语料指纹**，与训练时不一致则报错退出。
+推理前会校验编码器版本与**资源语料指纹**；写出后立即跑契约校验器，违规即非零退出。
+`--data-source` 同样必填；产物要给 platform 时必须用 `platform` 轨道。
 
-### 配合 platform（日常，无需手动）
+## 交接契约（可执行）
 
-engine 是 platform 的离线推荐引擎。日常使用时**无需在本仓库手动操作**——在 platform 仓库执行：
+规范文档：[`docs/contracts/platform-contract.md`](docs/contracts/platform-contract.md)
+可执行版本：[`contracts/v1/`](contracts/v1/README.md)（JSON Schema + golden fixtures + 校验器）
+
+```bash
+# 校验 platform 导出的快照（meta.json + 5 个 CSV + sha256）
+python contracts/v1/validate.py snapshot dataset/platform_snapshot/<run_id>
+
+# 校验推荐产物（主文件 + 可选信封）
+python contracts/v1/validate.py recommendations \
+  model/recommendations.json --envelope model/recommendations.meta.json
+
+# 一次校验两侧
+python contracts/v1/validate.py all \
+  --snapshot dataset/platform_snapshot/<run_id> \
+  --recommendations model/recommendations.json
+```
+
+平台仓库通过 `scripts/check-contract-sync.sh` 复用同一份 fixtures，避免两侧各写各的。
+
+## 与 platform 配合（日常，无需手动）
+
+engine 是 platform 的离线推荐引擎。日常使用在 platform 仓库执行：
 
 ```bash
 cd ../edurec-platform
-bash scripts/handoff.sh        # 自动：导出快照 → 本仓库训练 + 推理 → 结果回传导入
+bash scripts/handoff.sh               # 导出快照 → 校验 → 训练 → 推理 → 校验产物 → 回传导入
+bash scripts/handoff.sh --infer-only  # 复用已有模型，只导出 → 推理 → 导入
 ```
 
-`handoff.sh` 会自动用本仓库的 `.venv` 完成训练与全量推理，并把 `model/recommendations.json` 拷回 platform 导入。
+`handoff.sh` 会自动用本仓库的 `.venv` 完成训练与全量推理，并把
+`model/recommendations.json` 拷回 platform 导入。
 
-### 独立演示（本仓库单独跑）
+## 独立演示
 
 ```bash
 python -m scripts.gen_sim_data        # 模拟数据 → dataset/sim
-python -m scripts.load_movielens      # 公开集 → dataset/ml_processed（首次会联网下载）
+python -m scripts.train_semantic --data-source sim --model-dir model --epochs 3
+python -m scripts.run_batch_infer --data-source sim --model-dir model --out-dir model
 ```
 
-### 平台真实数据（手动，等价于 handoff.sh）
+## 知识生成服务（可选在线能力）
 
-快照由 platform 的 `export_snapshot` 产出后手动拷入 `dataset/platform_snapshot/<run_id>/`，
-契约与交接流程见 `docs/platform-contract.md`。
+`scripts/kg_server.py` 把 `src/kg/generate.py` 的「标题/描述 → 概念」能力封装成 HTTP 服务。
+平台在搜索或知识点详情里可实时请求，拿到结果后落库展示。生成算法、Wikifier 调用与
+模型依赖都留在 engine，平台不执行 Python。
 
-## 说明
-
-- `dataset/`、`model/` 不入库；engine 只读写本仓库。
-- 参数集中在 `src/engine/config.py`，`seed` 固定可复现。
-- 文本编码器可插拔：本地降级实现（无网络依赖）↔ 真 transformer
-  （`encoder_kind="sentence_transformer"`，需先装 `sentence-transformers` 并缓存模型）。
-- 论文原文抽取文本在 `docs/papers/`（**若仓库公开建议移除**，只留引用信息）。
-
-## 知识生成服务（供 platform 实时调用）
-
-scripts/kg_server.py 把 model/generate.py 的能力封装成 HTTP 服务：
-平台在搜索或知识点详情里实时请求「标题/描述 → 概念」，拿到结果后落库展示。
-生成算法、Wikifier 调用与模型依赖都留在 engine，平台不执行 Python。
-
-`ash
+```bash
 # 仓库根目录；依赖与 model/ 需先准备好（model/ 不入库）
-python scripts/kg_server.py --host 127.0.0.1 --port 8090
-`
+.venv/bin/python scripts/kg_server.py --host 127.0.0.1 --port 8090
+```
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/health` | 服务状态 |
+| GET | `/health` | 服务状态 + `contract_version` |
 | POST | `/knowledge/generate` | `{title, description, point_code}` → `{concepts:[{name, page_rank}]}` |
-| POST | `/knowledge/generate_batch` | 批量生成 |
+| POST | `/knowledge/generate_batch` | 批量生成，单条失败不阻断整批 |
 
-- 概念过滤：pageRank 阈值 + 停用词 + 最短长度，默认最多 30 个；
-- 平台侧配置 `knowledge.generator_url`（默认 `http://127.0.0.1:8090`），
-  engine 未启动时只影响「自动生成概念」，不影响平台其他功能；
-- 与 docs/platform-contract.md 的文件交接并行：该服务是**可选**的在线能力，
-  不改变「快照进、排名出」的主契约。
+契约与版本规则见 [`docs/contracts/kg-service-contract.md`](docs/contracts/kg-service-contract.md)。
+平台侧配置 `knowledge.generator_url`（默认 `http://127.0.0.1:8090`）；engine 未启动时
+只影响「自动生成概念」，不影响推荐、搜索等其他功能。
 
 ## 目录结构
 
-- `src/kg/`：RDF 图谱、概念先修、嵌入与知识生成服务（本次从 EMBEDD-ER 迁入）。
-- `model/`：MOOCCube 数据、Wikipedia2Vec 权重与输出（体积大，不入库）。
-- `scripts/`：训练/推理/服务入口；`scripts/kg_server.py` 为知识生成服务入口。
+```
+contracts/v1/          交接契约：schema、fixtures、校验器
+src/engine/            推荐引擎：data → features → models → pipeline
+src/kg/                知识图谱/概念生成（生产路径；research/ 为研究脚本，不在运行时）
+scripts/               训练/推理/服务入口
+docs/                  设计、契约、数据流、研究状态
+tests/                 engine + 契约测试
+```
 
+- 参数集中在 `src/engine/config.py`，`seed` 固定可复现。
+- 文本编码器可插拔：本地降级实现（无网络依赖）↔ 真 transformer
+  （`encoder_kind="sentence_transformer"`，需先装 `sentence-transformers` 并缓存模型）。
+- 引用与来源见 [`docs/reference/references.md`](docs/reference/references.md) 与 [`CITATION.cff`](CITATION.cff)；本仓库不再保存论文原文抽取文本。
+
+## 文档
+
+- [docs/README.md](docs/README.md) —— **文档地图（从这里开始）**
+- [docs/architecture.md](docs/architecture.md) —— engine 双角色与工程边界
+- [docs/backlog.md](docs/backlog.md) —— engine 待实现清单与建议顺序
+- [docs/contracts/README.md](docs/contracts/README.md) —— 跨仓契约总览（C1 / C2）
+- [docs/design/model-design.md](docs/design/model-design.md) —— 推荐模型设计
+
+详细设计与参考在 `docs/design/`、`docs/reference/`；契约权威在 `docs/contracts/`。

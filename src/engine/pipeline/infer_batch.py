@@ -1,6 +1,6 @@
 """批量推理：全量用户走语义召回 → 质量融合 → 去重 → top-N。
 
-对齐 `docs/platform-contract.md` 的「方向 B」：
+对齐 `docs/contracts/platform-contract.md` 的「方向 B」：
 
   - 主文件必须是 `{平台 user_id: [平台 resource_id, …]}`，按相关性降序、已去重；
   - **覆盖全量用户**，包括平台上没有行为的冷启动用户（走热门兜底）；
@@ -20,7 +20,10 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ..features.encoder import resource_text
+from ..data.access import BundleAccess
+from ..models.recall.semantic import (
+    fuse_quality, normalize_minmax, rank_percentile,
+)
 from ..models.recall.trainer import prepare_item_matrix, score_users
 
 
@@ -81,6 +84,24 @@ def _as_rows(acts) -> list[tuple[int, int]]:
     return out
 
 
+def _fuse_user_scores(semantic_norm: np.ndarray, rating_norm: np.ndarray,
+                      popularity_norm: np.ndarray, config) -> np.ndarray:
+    """把某个用户的语义分与全站质量信号融合成最终排序分。
+
+    **只在这里除以一次权重和**。此前的实现先用 `fuse_quality` 算非语义部分
+    （已经除过一次 total），再在逐用户融合时又除一次，权重和不为 1 时会把
+    质量信号系统性压低；这是一个只有非默认权重才会暴露的静默错误。
+    """
+    return fuse_quality(
+        semantic_norm,
+        rating_norm,
+        popularity_norm,
+        w_semantic=config.quality_w_semantic,
+        w_rating=config.quality_w_rating,
+        w_popularity=config.quality_w_popularity,
+    )
+
+
 def infer_batch(model, encoder, bundle, config, item_ids: list[int] | None = None,
                 split=None, target_users: list[int] | None = None,
                 use_train_only: bool = False) -> BatchResult:
@@ -89,38 +110,23 @@ def infer_batch(model, encoder, bundle, config, item_ids: list[int] | None = Non
     `target_users` 默认取 `bundle.users` 的全部用户（对应「覆盖全量用户」的契约要求）；
     冷启动（无历史）用户直接给热门兜底。
     """
-    item_ids = item_ids or sorted(r.resource_id for r in bundle.resources)
+    access = BundleAccess(bundle)
+    item_ids = item_ids or access.item_ids
     index_of = {item: i for i, item in enumerate(item_ids)}
 
     # 资源文本按 item_ids 顺序编码；顺序必须与后续打分矩阵的列一一对应
-    text_of = {r.resource_id: resource_text(r) for r in bundle.resources}
-    item_texts = [text_of.get(i, "") for i in item_ids]
-    prepare_item_matrix(model, encoder, item_texts)
+    prepare_item_matrix(model, encoder, access.item_texts(item_ids))
 
     # 热度：被交互次数（全量口径，用于质量融合与冷启动兜底）
-    from collections import Counter
-    counts = Counter(b.resource_id for b in bundle.behaviors)
-    popularity = np.array([counts.get(i, 0) for i in item_ids], dtype=np.float32)
+    popularity = np.array(
+        [access.popularity.get(i, 0) for i in item_ids], dtype=np.float32)
 
     # 评分：快照有 ratings 时才启用（MOOCCube 没有评分，该项自然退化为 0）
-    rating_sum: dict[int, list[int]] = {}
-    for r in bundle.ratings:
-        rating_sum.setdefault(r.resource_id, []).append(r.score)
-    ratings = np.array(
-        [float(np.mean(rating_sum[i])) if rating_sum.get(i) else 0.0 for i in item_ids],
-        dtype=np.float32)
+    ratings = np.array([access.mean_rating(i) for i in item_ids], dtype=np.float32)
 
-    from ..models.recall.semantic import (
-        fuse_quality, normalize_minmax, rank_percentile)
-    quality = fuse_quality(
-        np.zeros(len(item_ids), dtype=np.float32),      # 语义项稍后逐用户计算
-        normalize_minmax(ratings),
-        rank_percentile(popularity),
-        w_semantic=0.0,                                 # 这里只取「非语义」部分
-        w_rating=config.quality_w_rating,
-        w_popularity=config.quality_w_popularity)
-    quality_total = config.quality_w_semantic + config.quality_w_rating \
-        + config.quality_w_popularity
+    # 质量信号只在这里归一化一次，逐用户融合时复用
+    rating_norm = normalize_minmax(ratings)
+    popularity_norm = rank_percentile(popularity)
 
     # 冷启动兜底顺序：热度降序
     popular_order = [item_ids[i] for i in np.argsort(-popularity)]
@@ -131,6 +137,7 @@ def infer_batch(model, encoder, bundle, config, item_ids: list[int] | None = Non
 
     # 只给「有历史」的用户构造需求文本，批量编码一次
     active = [u for u in targets if history.get(u)]
+    text_of = access.text_by_id
     need_texts = []
     for user in active:
         acts = sorted(_as_rows(history[user]), key=lambda x: (x[1], x[0]))
@@ -147,7 +154,7 @@ def infer_batch(model, encoder, bundle, config, item_ids: list[int] | None = Non
         scores = semantic[row].astype(np.float64)
         lo, hi = float(scores.min()), float(scores.max())
         norm = (scores - lo) / (hi - lo) if hi - lo > 1e-12 else np.zeros_like(scores)
-        fused = (config.quality_w_semantic * norm + quality) / quality_total
+        fused = _fuse_user_scores(norm, rating_norm, popularity_norm, config)
 
         seen = {rid for rid, _ in _as_rows(history[user])}
         order = np.argsort(-fused)
@@ -166,9 +173,9 @@ def infer_batch(model, encoder, bundle, config, item_ids: list[int] | None = Non
     for user in targets:
         if history.get(user):
             continue
-        picked = [i for i in popular_order][:config.top_n]
+        picked = popular_order[:config.top_n]
         result.recommendations[user] = Recommendation(
-            user, picked, [float(popularity[index_of[i]]) for i in picked])
+            user, picked, [float(popularity_norm[index_of[i]]) for i in picked])
         result.cold_start_users += 1
 
     return result
@@ -178,7 +185,7 @@ def write_handoff(result: BatchResult, out_path: str, envelope_path: str | None 
                   envelope: dict | None = None) -> None:
     """写主文件（+ 可选旁挂信封）。
 
-    契约硬约束（逐条对应 `docs/platform-contract.md`）：
+    契约硬约束（逐条对应 `docs/contracts/platform-contract.md`）：
 
       * 顶层**只有** `{字符串键: 非负整数数组}`，不得添加任何兄弟字段；
       * 键是十进制无符号整数；元素必须是 JSON **整数**（不能是字符串或小数）；

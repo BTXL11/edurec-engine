@@ -15,13 +15,12 @@ import sys
 import time
 import warnings
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np  # noqa: E402
 import rdflib  # noqa: E402
 
-from embeddings.embedder import load_model_, node_embeddings  # noqa: E402
-from recommender.idmap import (  # noqa: E402
+from kg.embeddings.embedder import load_model_, node_embeddings  # noqa: E402
+from kg.recommender.idmap import (  # noqa: E402
     build_reverse_map,
     cid_from_filename,
     resolve,
@@ -121,7 +120,7 @@ def build(force=False, verbose=True, limit=None):
     if verbose:
         pop = None
         try:
-            from recommender.stats import load_cache
+            from kg.recommender.stats import load_cache
 
             pop = load_cache("popularity.json")
         except Exception:  # noqa: BLE001

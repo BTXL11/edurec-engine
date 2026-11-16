@@ -1,5 +1,5 @@
-from preprocessing.text import text2RDF
-from embeddings.embedder import load_model_, decode_concept
+from kg.preprocessing.text import text2RDF
+from kg.embeddings.embedder import load_model_, decode_concept
 import os
 import warnings
 

@@ -9,11 +9,10 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np  # noqa: E402
 
-from recommender.stats import PROCESSED, load_cache, read_tsv_pairs, save_cache  # noqa: E402
+from kg.recommender.stats import PROCESSED, load_cache, read_tsv_pairs, save_cache  # noqa: E402
 
 CACHE_NAME = "user_courses.json"
 
@@ -72,8 +71,7 @@ def coverage_report(user_courses, embeddings):
 if __name__ == "__main__":
     import sys as _sys
 
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from recommender.build_embeddings import load_embeddings  # noqa: E402
+    from kg.recommender.build_embeddings import load_embeddings  # noqa: E402
 
     print("构建用户选课表 ...")
     uc = build_user_courses()

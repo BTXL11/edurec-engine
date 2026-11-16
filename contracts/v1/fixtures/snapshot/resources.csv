@@ -1,0 +1,4 @@
+resource_id,title,description,type,category_id,tags_json,metadata_json,avg_rating,view_count,difficulty,duration_minutes,created_at
+101,线性代数,向量、矩阵与特征值。,course,1,"[""数学"",""线性代数""]","{""level"":""basic""}",4.50,120,beginner,600,1767000000
+102,Python 入门,从变量到函数的基础教程。,video,2,"[""编程"",""Python""]",{},0.00,80,,45,1767000100
+103,实变函数,测度、可测函数与勒贝格积分。,course,1,"[""数学"",""实变函数""]","{""level"":""advanced""}",4.00,30,advanced,900,1767000200

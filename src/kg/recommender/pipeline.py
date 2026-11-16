@@ -22,7 +22,6 @@ import sys
 import time
 import warnings
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np  # noqa: E402
 
@@ -118,7 +117,7 @@ def build_graph(resource, out_dir=None, threshold=-1, lang="zh", max_retries=3,
 
     返回 (rdflib.Graph | None, dict)。图会存成 <out_dir>/<key>.ttl（若给了 out_dir）。
     """
-    from preprocessing.text import text2Wikifier, wikifier2RDF
+    from kg.preprocessing.text import text2Wikifier, wikifier2RDF
 
     text = resource.wikify_text()
     t0 = time.time()
@@ -151,7 +150,7 @@ def build_graph(resource, out_dir=None, threshold=-1, lang="zh", max_retries=3,
 
 def graph_concepts(g):
     """从图里取 (概念名 -> pageRank)。概念名用项目的 decode_concept 解码。"""
-    from embeddings.embedder import decode_concept
+    from kg.embeddings.embedder import decode_concept
 
     out = {}
     for s, p, o in g:
@@ -198,7 +197,7 @@ def embed_doc2vec(texts):
 
 def embed_bert(texts, model_name="bert-base-chinese", use_cuda=None):
     """BERT 句向量，走项目 embeddings/bert.py 的 simpletransformers 链路。"""
-    from embeddings.bert import bert_embeddings
+    from kg.embeddings.bert import bert_embeddings
 
     vecs = bert_embeddings(list(texts), model_name=model_name, use_cuda=use_cuda)
     return np.asarray(vecs, dtype=np.float32)
@@ -209,7 +208,7 @@ def embed_embedder(graph_rows):
 
     graph_rows: [(概念名, pageRank), ...]，来自刚生成的图。
     """
-    from embeddings.embedder import load_model_
+    from kg.embeddings.embedder import load_model_
 
     path = os.path.join(ROOT, "models", "wikipedia", "zhwiki_20180420_300d.txt")
     model = load_model_(path, 300)

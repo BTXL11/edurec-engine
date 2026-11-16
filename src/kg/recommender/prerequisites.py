@@ -14,9 +14,8 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from recommender.stats import PROCESSED, load_cache, read_tsv_pairs, save_cache  # noqa: E402
+from kg.recommender.stats import PROCESSED, load_cache, read_tsv_pairs, save_cache  # noqa: E402
 
 CACHE_NAME = "prereq_graph.json"
 
@@ -142,7 +141,7 @@ if __name__ == "__main__":
     # 刚才生成的 20 门课里有多少有概念/先修
     import json
 
-    from recommender.idmap import build_reverse_map, resolve
+    from kg.recommender.idmap import build_reverse_map, resolve
 
     root = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "model")
     codes = json.load(open(os.path.join(root, "output", "graphs", "v01", "_codes.json"),

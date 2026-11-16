@@ -19,9 +19,8 @@ import os
 import sys
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from recommender.stats import DATA, load_cache, save_cache  # noqa: E402
+from kg.recommender.stats import DATA, load_cache, save_cache  # noqa: E402
 
 CACHE_NAME = "popularity.json"
 

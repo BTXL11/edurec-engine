@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Shionyori/edurec-engine/contracts/v1/recommendations.schema.json",
+  "title": "engine → platform 推荐主文件（contract_version = 1）",
+  "description": "顶层只能是 {平台 user_id: [平台 resource_id, ...]}；不得有兄弟字段。数组顺序即排名。",
+  "type": "object",
+  "propertyNames": {
+    "pattern": "^[0-9]+$",
+    "description": "十进制无符号整数（平台 user_id）；前导零允许但无意义"
+  },
+  "additionalProperties": {
+    "type": "array",
+    "description": "该用户的资源 ID 列表，按相关性降序，必须已去重",
+    "items": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "uniqueItems": true
+  }
+}

@@ -139,6 +139,35 @@ def test_cache_version_separates_files(tmp_path):
     assert a.version.startswith("cached(")
 
 
+def test_cache_version_tracks_fitted_corpus(tmp_path):
+    """fit 之后 version 必须带上语料指纹，否则 checkpoint 无法校验训练口径。"""
+    enc = CachedEncoder(LocalTfidfSvdEncoder(dim=32, seed=0), str(tmp_path / "c.npz"))
+    assert "corpus=" not in enc.version
+    enc.fit(CORPUS)
+    assert "corpus=" in enc.version
+    assert enc.corpus_fingerprint
+
+
+def test_cached_encoder_invalidates_when_corpus_changes(tmp_path):
+    """同一缓存文件、同一实现，但语料变了：旧向量必须作废并重新编码。
+
+    这是旧实现的真实缺陷：缓存键只有文本 hash，缓存路径又由 fit 之前的 version
+    生成，换语料后同一文本会命中旧 IDF 下的向量，训练/推理口径被悄悄污染。
+    """
+    path = str(tmp_path / "cache.npz")
+    first = CachedEncoder(LocalTfidfSvdEncoder(dim=32, seed=0), path)
+    first.fit(CORPUS)
+    first.encode(CORPUS)
+
+    changed = CORPUS + ["新增语料。它改变了 IDF 权重。"]
+    second = CachedEncoder(LocalTfidfSvdEncoder(dim=32, seed=0), path)
+    second.fit(changed)
+    got = second.encode(CORPUS)
+
+    fresh = LocalTfidfSvdEncoder(dim=32, seed=0).fit(changed).encode(CORPUS)
+    assert np.allclose(got, fresh)
+
+
 # --- 工厂与占位实现 ---
 
 def test_build_encoder_local_with_cache(tmp_path):

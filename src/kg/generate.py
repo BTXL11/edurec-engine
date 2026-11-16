@@ -33,9 +33,8 @@ import json
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from recommender.pipeline import DEFAULT_METHODS, Resource, run  # noqa: E402
+from kg.recommender.pipeline import DEFAULT_METHODS, Resource, run  # noqa: E402
 
 
 def load_input(path):
